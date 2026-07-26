@@ -10,7 +10,7 @@ change the interface, build a different broadcast workflow, or take the ideas
 in an entirely new direction.
 
 > Have fun. If you build on the core mechanics, please credit miniZeep and
-> Leiter Consulting somewhere visible. The legal requirements are those in the
+> Chris Leiter or 'L3it3R' somewhere visible. The legal requirements are those in the
 > [MIT License](LICENSE).
 
 ## What works today
