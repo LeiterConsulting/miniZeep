@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <ZEEPKIST_INSTALL_DIR Condition="'$(ZEEPKIST_INSTALL_DIR)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Zeepkist</ZEEPKIST_INSTALL_DIR>
+    <ZEEPKIST_MANAGED_DIR Condition="'$(ZEEPKIST_MANAGED_DIR)' == ''">$(ZEEPKIST_INSTALL_DIR)\Zeepkist_Data\Managed</ZEEPKIST_MANAGED_DIR>
+    <BEPINEX_CORE_DIR Condition="'$(BEPINEX_CORE_DIR)' == ''">$(ZEEPKIST_INSTALL_DIR)\BepInEx\core</BEPINEX_CORE_DIR>
+  </PropertyGroup>
+
+  <Import
+    Project="$(MSBuildThisFileDirectory)Directory.Build.props.user"
+    Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.props.user')" />
+</Project>
