@@ -1,0 +1,39 @@
+# Build output
+bin/
+obj/
+artifacts/
+TestResults/
+
+# Local game and mod-loader files: never commit redistributed binaries
+BepInEx/
+Zeepkist_Data/
+Game/
+*.dll
+*.pdb
+*.mdb
+*.zip
+
+# Local build configuration
+Directory.Build.props.user
+*.user
+*.suo
+.env
+.env.*
+
+# Logs, caches, and temporary files
+*.log
+*.tmp
+*.bak
+.tmp/
+.test-artifacts/
+
+# IDE and operating system files
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Packages generated for local testing
+release/
+packages/
