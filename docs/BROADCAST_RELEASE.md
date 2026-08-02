@@ -47,7 +47,8 @@ Success criteria:
 
 - `V` cycles three named shots: `OVERVIEW`, `FIELD`, and `FOLLOW`.
 - Overview fits the loaded course; Field continuously fits the live racer
-  group; Follow tracks the selected racer.
+  group; Follow tracks the selected racer using Isometric, Chase, Lead, or
+  repositioning Trackside composition selected directly with `1`–`4`.
 - Selection keys and UI selection retain Steam-ID identity while order changes.
 - Zoom is cursor-centred, deep enough for close work, and works in every shot.
 - Pan, orbit, precision/fast modifiers, reset, and smoothing remain available.
@@ -97,9 +98,9 @@ Success criteria:
   Steam ID.
 - User, developer, architecture, roadmap, and changelog documents describe the
   shipped behavior and controls.
-- Manual acceptance covers activation/exit, all three camera shots, clean feed,
-  roster scrolling, repeat attempts, pause/return, host and non-host use,
-  join/leave, and exact local-state restoration.
+- Manual acceptance covers activation/exit, all shot families and follow
+  styles, clean feed, roster scrolling, repeat attempts, pause/return, host and
+  non-host use, join/leave, and exact local-state restoration.
 
 ## Explicit non-goals for this release
 

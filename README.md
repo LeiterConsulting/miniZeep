@@ -5,7 +5,7 @@ miniZeep is a community-first broadcast and spectator toolkit for
 plugin is named **ZeepCast**: an observer-side isometric race director for cups,
 contests, community events, and streams.
 
-The 0.2 release is a bounded, spectator-first broadcast tool rather than an
+The 0.2 release line is a bounded, spectator-first broadcast tool rather than an
 open-ended prototype. The code remains intentionally extensible: use the
 camera and telemetry core, change the interface, or build another production
 workflow on top of it.
@@ -16,8 +16,8 @@ workflow on top of it.
 
 ## What works today
 
-- Three named isometric shots: whole-course overview, live-field framing, and
-  selected-racer follow
+- Overview and live-field isometric shots plus isometric, chase, lead, and
+  intelligent repositioning trackside racer-follow shots
 - Deep cursor-focused zoom, orbit, keyboard pan, and mouse-drag pan
 - Scrollable classification, clickable racer tiles, and optional world labels
 - Live speed, attempt/result time, finish state, race status, field totals, and
@@ -73,6 +73,8 @@ reference the copies from your own local installation. Read
 | `F9` | Hide or show the broadcast interface |
 | Backquote (`` ` ``) | Hide or show Race Control and help for a clean feed |
 | `V` | Cycle Overview, Field, and Follow shots |
+| `1` / `2` / `3` / `4` | Isometric, Chase, Lead, or Trackside follow |
+| `H` | Show or hide the complete operator control reference |
 | `M` | Hide or show on-track racer labels |
 | `[` / `]` | Previous or next racer |
 | `W A S D` | Pan relative to the camera |

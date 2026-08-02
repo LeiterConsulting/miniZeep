@@ -35,7 +35,8 @@ miniZeep should be:
 `Core/BroadcastDirector.cs` owns:
 
 - Activation and cleanup
-- Overview, live-field, and followed-racer camera modes
+- Overview and live-field isometric modes plus motion-aware isometric, chase,
+  lead, and repositioning trackside follow shots
 - Camera input and framing
 - Level bounds
 - Racer discovery and ordering
@@ -44,9 +45,12 @@ miniZeep should be:
 - Camera culling-distance adjustments
 - Native spectator-graphics ownership while the program view is active
 
-The director deliberately separates "director active" from "visualization
+The director deliberately separates "session armed" from "program-view
 active." This permits F9 to show telemetry over normal gameplay while camera
-input and world markers remain disabled outside the isometric view.
+input and world markers remain disabled and other HUD mods retain race chrome.
+Camera ownership is acquired only for the program view and released before
+Zeepkist processes pause-menu transitions. F6 exits native photo mode only when
+ZeepCast entered it.
 
 ### RacerSnapshot
 

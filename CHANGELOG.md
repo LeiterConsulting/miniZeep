@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.1 - Camera handoff and operator controls
+
+- Fixed race chrome remaining suppressed after returning from ZeepCast
+- Fixed ZeepCast-owned photo mode leaving a spectator actor at the race spawn
+- Added motion-aware Chase, Lead, and Trackside follow shots on `2`, `3`, and
+  `4`, with Isometric follow on `1`
+- Added an `H` operator-control reference and reduced the persistent legend to
+  essential controls
+- Changed control configuration to ZeepSDK-compatible key entries so the mod
+  settings page renders key editors without unsupported-type errors
+- Kept explicit `F9` graphics available over normal racing without claiming
+  program-view ownership from other HUD mods
+
 ## 0.2.0 - Spectator-first broadcast release
 
 - Added Overview, Field, and Follow shot workflow with `V` cycling

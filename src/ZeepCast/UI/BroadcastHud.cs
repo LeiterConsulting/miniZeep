@@ -37,6 +37,7 @@ namespace ZeepCast.UI
         private RectTransform _selectedPanel = null!;
         private RectTransform _directorPanel = null!;
         private RectTransform _helpPanel = null!;
+        private RectTransform _controlReference = null!;
         private RectTransform _rosterContent = null!;
         private RectTransform _rosterViewport = null!;
         private ScrollRect _rosterScroll = null!;
@@ -61,6 +62,7 @@ namespace ZeepCast.UI
         private bool _visible;
         private bool _directorConsoleVisible = true;
         private bool _markersVisible = true;
+        private bool _helpVisible;
         private int _layoutWidth;
         private int _layoutHeight;
 
@@ -129,9 +131,15 @@ namespace ZeepCast.UI
             ApplySurfaceVisibility();
         }
 
+        public void SetHelpVisible(bool visible)
+        {
+            _helpVisible = visible;
+            ApplySurfaceVisibility();
+        }
+
         private void Update()
         {
-            if (!_initialized || !_visible || !_director.IsActive)
+            if (!_initialized || !_visible || !_director.IsSessionActive)
             {
                 return;
             }
@@ -464,7 +472,7 @@ namespace ZeepCast.UI
             _directorKeys = UiFactory.CreateText(
                 _directorPanel,
                 "Keys",
-                "`  CLEAN FEED\nV  NEXT SHOT\n[ ]  CHANGE TARGET\nM  RACER LABELS",
+                "V  NEXT SHOT\n1–4  FOLLOW STYLE\n[ ]  CHANGE TARGET\nH  ALL CONTROLS",
                 11,
                 FontStyle.Bold,
                 TextAnchor.UpperLeft,
@@ -489,18 +497,84 @@ namespace ZeepCast.UI
                 background,
                 new Vector2(1f, 0f),
                 new Vector2(1f, 0f),
-                new Vector2(930f, 28f),
+                new Vector2(560f, 32f),
                 new Vector2(-12f, 3f));
 
             var help = UiFactory.CreateText(
                 background,
                 "Help",
-                "` CLEAN FEED  •  F6 EXIT  •  F9 GRAPHICS  •  V SHOT  •  [ ] RACER  •  WASD / MMB PAN  •  RMB ORBIT  •  WHEEL ZOOM  •  R RESET",
+                "F6 EXIT  •  V SHOT  •  1–4 FOLLOW  •  H CONTROLS",
                 11,
                 FontStyle.Bold,
                 TextAnchor.MiddleRight,
                 new Color(0.84f, 0.88f, 0.96f, 0.92f));
             UiFactory.Stretch(help.rectTransform, 12f, 2f, 12f, 2f);
+
+            _controlReference = UiFactory.CreatePanel(
+                _canvas,
+                "ControlReference",
+                new Color(0.015f, 0.025f, 0.05f, 0.94f),
+                false);
+            UiFactory.Anchor(
+                _controlReference,
+                new Vector2(0.5f, 0.5f),
+                new Vector2(0.5f, 0.5f),
+                new Vector2(560f, 510f),
+                Vector2.zero);
+
+            var accent = UiFactory.CreatePanel(
+                _controlReference,
+                "Accent",
+                UiFactory.Accent,
+                false);
+            accent.anchorMin = new Vector2(0f, 1f);
+            accent.anchorMax = new Vector2(1f, 1f);
+            accent.pivot = new Vector2(0.5f, 1f);
+            accent.sizeDelta = new Vector2(0f, 4f);
+            accent.anchoredPosition = Vector2.zero;
+
+            var title = UiFactory.CreateText(
+                _controlReference,
+                "Title",
+                "ZEEPCAST OPERATOR CONTROLS",
+                22,
+                FontStyle.Bold,
+                TextAnchor.MiddleLeft,
+                UiFactory.TextPrimary);
+            UiFactory.Anchor(
+                title.rectTransform,
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(-48f, 54f),
+                new Vector2(24f, -18f));
+
+            var reference = UiFactory.CreateText(
+                _controlReference,
+                "Reference",
+                "DIRECTOR\n" +
+                "F6   Enter / exit ZeepCast\n" +
+                "F9   Broadcast graphics\n" +
+                "`      Clean feed / operator console\n" +
+                "H     Close this reference\n\n" +
+                "SHOTS\n" +
+                "V     Overview / field / follow\n" +
+                "1     Isometric follow\n" +
+                "2     Chase follow\n" +
+                "3     Lead follow\n" +
+                "4     Trackside follow\n" +
+                "[ ]   Previous / next racer\n" +
+                "M     Racer labels\n\n" +
+                "CAMERA\n" +
+                "Wheel   Zoom\n" +
+                "WASD / middle mouse   Pan\n" +
+                "Right mouse   Orbit isometric view\n" +
+                "R     Reset framing\n" +
+                "Shift precision   •   Ctrl fast",
+                14,
+                FontStyle.Normal,
+                TextAnchor.UpperLeft,
+                new Color(0.88f, 0.91f, 0.97f, 1f));
+            UiFactory.Stretch(reference.rectTransform, 26f, 78f, 26f, 22f);
         }
 
         private void RefreshChrome()
@@ -508,7 +582,7 @@ namespace ZeepCast.UI
             _eventTitle.text = _director.EventTitle.ToUpperInvariant();
             _levelTitle.text = _director.LevelTitle;
             _clock.text = _director.LobbyClock;
-            _mode.text = CameraModeLabel(_director.CameraMode);
+            _mode.text = _director.ShotLabel;
             _rosterHeader.text = $"CLASSIFICATION  {_director.Racers.Count}";
 
             var summary = _director.FieldSummary;
@@ -516,7 +590,7 @@ namespace ZeepCast.UI
                 $"FIELD  {summary.Total}\n" +
                 $"<color=#{ColorUtility.ToHtmlStringRGB(UiFactory.Positive)}>●</color> LIVE  {summary.Racing}    FIN  {summary.Finished}\n" +
                 $"<color=#{ColorUtility.ToHtmlStringRGB(UiFactory.Danger)}>●</color> INCIDENTS  {summary.Incidents}    SPEC  {summary.Spectating}";
-            _directorShot.text = $"SHOT  {CameraModeLabel(_director.CameraMode)}";
+            _directorShot.text = $"SHOT  {_director.ShotLabel}";
 
             if (_director.TryGetSelected(out var selected))
             {
@@ -802,7 +876,13 @@ namespace ZeepCast.UI
 
             if (_helpPanel != null)
             {
-                _helpPanel.gameObject.SetActive(_visible && _directorConsoleVisible && !narrow);
+                _helpPanel.gameObject.SetActive(_visible && _directorConsoleVisible);
+            }
+
+            if (_controlReference != null)
+            {
+                _controlReference.gameObject.SetActive(
+                    _visible && _directorConsoleVisible && _helpVisible);
             }
 
             if (_markerLayer != null)
@@ -833,8 +913,10 @@ namespace ZeepCast.UI
             _directorPanel.sizeDelta = new Vector2(narrow ? 250f : 286f, 286f);
             _directorPanel.anchoredPosition = new Vector2(-18f, -96f);
 
-            _helpPanel.sizeDelta = new Vector2(ultrawide ? 980f : 930f, 30f);
+            _helpPanel.sizeDelta = new Vector2(560f, 32f);
             _helpPanel.anchoredPosition = new Vector2(-12f, 3f);
+
+            _controlReference.sizeDelta = new Vector2(narrow ? 500f : 560f, 510f);
 
             _liveBadge.gameObject.SetActive(!narrow);
             _levelTitle.rectTransform.anchorMin = new Vector2(narrow ? 0.27f : 0.25f, 0f);

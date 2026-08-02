@@ -17,6 +17,14 @@ namespace ZeepCast.Core
         Follow
     }
 
+    internal enum FollowShotStyle
+    {
+        Isometric,
+        Chase,
+        Lead,
+        Trackside
+    }
+
     internal sealed class BroadcastDirector : MonoBehaviour
     {
         private const string GameSceneName = "GameScene";
@@ -58,6 +66,8 @@ namespace ZeepCast.Core
         private bool _enteredPhotoMode;
         private bool _visualizationWasActive;
         private bool _hudAutoHiddenOutsideVisualization;
+        private bool _cameraOwned;
+        private bool _helpVisible;
 
         private bool _cameraWasOrthographic;
         private float _cameraOrthographicSize;
@@ -87,11 +97,22 @@ namespace ZeepCast.Core
         private ulong _selectedSteamId;
         private string _levelTitle = "Unknown level";
         private BroadcastFieldSummary _fieldSummary;
+        private ulong _motionSteamId;
+        private Vector3 _lastMotionPosition;
+        private Vector3 _smoothedMotionDirection = Vector3.forward;
+        private bool _hasMotionSample;
+        private Vector3 _tracksideCameraPosition;
+        private bool _hasTracksideCameraPosition;
 
-        public bool IsActive => _active;
+        // External HUD integrations use IsActive to decide whether ZeepCast owns
+        // the program view. A session can remain armed after returning to the race
+        // so F9 still works, but it must not suppress the game's race chrome.
+        public bool IsActive => _active && IsVisualizationActive;
+        internal bool IsSessionActive => _active;
         public bool IsUiVisible => _uiVisible;
         public bool IsDirectorConsoleVisible => _directorConsoleVisible;
         public bool AreMarkersVisible => _markersVisible;
+        public bool IsHelpVisible => _helpVisible;
         public bool IsVisualizationActive =>
             _active &&
             _master != null &&
@@ -101,12 +122,16 @@ namespace ZeepCast.Core
             _camera.gameObject.activeInHierarchy &&
             (_pauseMenuUi == null || !_pauseMenuUi.IsOpen);
         public BroadcastCameraMode CameraMode { get; private set; } = BroadcastCameraMode.Overview;
+        public FollowShotStyle FollowStyle { get; private set; } = FollowShotStyle.Isometric;
         public IReadOnlyList<RacerSnapshot> Racers => _racers;
         public ulong SelectedSteamId => _selectedSteamId;
         public Camera? BroadcastCamera => _camera;
         public string EventTitle => _settings.EventTitle.Value;
         public string LevelTitle => _levelTitle;
         public BroadcastFieldSummary FieldSummary => _fieldSummary;
+        public string ShotLabel => CameraMode == BroadcastCameraMode.Follow
+            ? $"FOLLOW / {FollowStyle.ToString().ToUpperInvariant()}"
+            : CameraMode.ToString().ToUpperInvariant();
 
         public string LobbyClock
         {
@@ -184,7 +209,7 @@ namespace ZeepCast.Core
                 return;
             }
 
-            if (_settings.ToggleDirector.Value.IsDown())
+            if (IsPressed(_settings.ToggleDirector))
             {
                 if (_active)
                 {
@@ -203,6 +228,11 @@ namespace ZeepCast.Core
 
             UpdateVisualizationState();
 
+            if (!_active)
+            {
+                return;
+            }
+
             // Photo mode can reopen its own spectator UI one frame after the
             // camera transition. ZeepCast keeps only that presentation surface
             // closed; it does not alter lobby or network state.
@@ -211,18 +241,18 @@ namespace ZeepCast.Core
                 _spectatorUi.Close(announce: false);
             }
 
-            if (_settings.ToggleInterface.Value.IsDown())
+            if (IsPressed(_settings.ToggleInterface))
             {
                 _hudAutoHiddenOutsideVisualization = false;
                 SetInterfaceVisible(!_uiVisible);
             }
 
-            if (_settings.ToggleDirectorConsole.Value.IsDown())
+            if (IsPressed(_settings.ToggleDirectorConsole))
             {
                 SetDirectorConsoleVisible(!_directorConsoleVisible);
             }
 
-            if (_settings.ToggleMarkers.Value.IsDown())
+            if (IsPressed(_settings.ToggleMarkers))
             {
                 SetMarkersVisible(!_markersVisible);
             }
@@ -238,17 +268,39 @@ namespace ZeepCast.Core
                 return;
             }
 
-            if (_settings.ToggleCameraMode.Value.IsDown())
+            if (IsPressed(_settings.ToggleHelp))
+            {
+                SetHelpVisible(!_helpVisible);
+            }
+
+            if (IsPressed(_settings.FollowIsometric))
+            {
+                SelectFollowStyle(FollowShotStyle.Isometric);
+            }
+            else if (IsPressed(_settings.FollowChase))
+            {
+                SelectFollowStyle(FollowShotStyle.Chase);
+            }
+            else if (IsPressed(_settings.FollowLead))
+            {
+                SelectFollowStyle(FollowShotStyle.Lead);
+            }
+            else if (IsPressed(_settings.FollowTrackside))
+            {
+                SelectFollowStyle(FollowShotStyle.Trackside);
+            }
+
+            if (IsPressed(_settings.ToggleCameraMode))
             {
                 ToggleCameraMode();
             }
 
-            if (_settings.PreviousRacer.Value.IsDown())
+            if (IsPressed(_settings.PreviousRacer))
             {
                 SelectRelative(-1);
             }
 
-            if (_settings.NextRacer.Value.IsDown())
+            if (IsPressed(_settings.NextRacer))
             {
                 SelectRelative(1);
             }
@@ -301,6 +353,14 @@ namespace ZeepCast.Core
 
             UpdateFieldFraming(rotation);
 
+            if (CameraMode == BroadcastCameraMode.Follow &&
+                FollowStyle != FollowShotStyle.Isometric &&
+                TryGetSelected(out var dynamicRacer))
+            {
+                ApplyDynamicFollowShot(dynamicRacer);
+                return;
+            }
+
             if (CameraMode == BroadcastCameraMode.Follow && TryGetSelected(out var selected))
             {
                 desiredPivot = selected.Transform.position + _panOffset;
@@ -338,6 +398,118 @@ namespace ZeepCast.Core
             _camera.transform.position = _currentPivot - rotation * Vector3.forward * distance;
         }
 
+        private void ApplyDynamicFollowShot(RacerSnapshot racer)
+        {
+            if (_camera == null || racer.Transform == null)
+            {
+                return;
+            }
+
+            UpdateMotionDirection(racer);
+
+            var direction = _smoothedMotionDirection;
+            direction.y = 0f;
+            if (direction.sqrMagnitude < 0.001f)
+            {
+                direction = Vector3.forward;
+            }
+            direction.Normalize();
+
+            var right = Vector3.Cross(Vector3.up, direction).normalized;
+            var scale = Mathf.Clamp(_zoomScale, 0.4f, 2.5f);
+            var focus = racer.Transform.position + Vector3.up * 1.4f + _panOffset;
+            Vector3 desiredPosition;
+            Vector3 lookAt;
+            float desiredFieldOfView;
+
+            switch (FollowStyle)
+            {
+                case FollowShotStyle.Lead:
+                    desiredPosition =
+                        focus + direction * (16f * scale) + right * (4f * scale) +
+                        Vector3.up * (7f * scale);
+                    lookAt = focus - direction * 2f;
+                    desiredFieldOfView = 48f;
+                    break;
+                case FollowShotStyle.Trackside:
+                    if (!_hasTracksideCameraPosition ||
+                        Vector3.Distance(_tracksideCameraPosition, focus) > 34f * scale)
+                    {
+                        _tracksideCameraPosition =
+                            focus + right * (15f * scale) + direction * (5f * scale) +
+                            Vector3.up * (7f * scale);
+                        _hasTracksideCameraPosition = true;
+                    }
+
+                    desiredPosition = _tracksideCameraPosition;
+                    lookAt = focus + direction * 2f;
+                    desiredFieldOfView = 44f;
+                    break;
+                default:
+                    desiredPosition =
+                        focus - direction * (12f * scale) + Vector3.up * (5f * scale);
+                    lookAt = focus + direction * 5f;
+                    desiredFieldOfView = 55f;
+                    break;
+            }
+
+            var smoothing = Mathf.Max(0.1f, _settings.PositionSmoothing.Value);
+            var blend = 1f - Mathf.Exp(-smoothing * Time.unscaledDeltaTime);
+            var desiredRotation = Quaternion.LookRotation(lookAt - desiredPosition, Vector3.up);
+
+            _currentPivot = Vector3.Lerp(_currentPivot, focus, blend);
+            _camera.orthographic = false;
+            _camera.fieldOfView = Mathf.Lerp(_camera.fieldOfView, desiredFieldOfView, blend);
+            _camera.nearClipPlane = 0.1f;
+            var requiredDrawDistance = Mathf.Max(
+                2000f,
+                (_hasLevelBounds ? _levelBounds.extents.magnitude * 2f : 500f) + 500f);
+            _camera.farClipPlane = requiredDrawDistance;
+            ApplyRacerLayerCullDistances(requiredDrawDistance);
+            _camera.transform.position = Vector3.Lerp(
+                _camera.transform.position,
+                desiredPosition,
+                blend);
+            _camera.transform.rotation = Quaternion.Slerp(
+                _camera.transform.rotation,
+                desiredRotation,
+                blend);
+        }
+
+        private void UpdateMotionDirection(RacerSnapshot racer)
+        {
+            var position = racer.Transform.position;
+            if (_motionSteamId != racer.SteamId)
+            {
+                _motionSteamId = racer.SteamId;
+                _lastMotionPosition = position;
+                _hasMotionSample = false;
+                var initialDirection = Vector3.ProjectOnPlane(racer.Transform.forward, Vector3.up);
+                _smoothedMotionDirection = initialDirection.sqrMagnitude > 0.001f
+                    ? initialDirection.normalized
+                    : Vector3.forward;
+                _hasTracksideCameraPosition = false;
+                return;
+            }
+
+            var displacement = Vector3.ProjectOnPlane(position - _lastMotionPosition, Vector3.up);
+            _lastMotionPosition = position;
+            if (displacement.sqrMagnitude < 0.0001f || displacement.sqrMagnitude > 2500f)
+            {
+                return;
+            }
+
+            var measuredDirection = displacement.normalized;
+            var directionBlend = _hasMotionSample
+                ? 1f - Mathf.Exp(-8f * Time.unscaledDeltaTime)
+                : 1f;
+            _smoothedMotionDirection = Vector3.Slerp(
+                _smoothedMotionDirection,
+                measuredDirection,
+                directionBlend).normalized;
+            _hasMotionSample = true;
+        }
+
         public void SelectRacer(ulong steamId)
         {
             var racer = _racers.FirstOrDefault(item => item.SteamId == steamId);
@@ -351,6 +523,7 @@ namespace ZeepCast.Core
             CameraMode = BroadcastCameraMode.Follow;
             _zoomScale = 1f;
             _currentSize = GetBaseViewSize();
+            ResetFollowTracking();
 
             if (_flyingCamera != null)
             {
@@ -407,19 +580,23 @@ namespace ZeepCast.Core
             _camera = _flyingCamera != null ? _flyingCamera.GetTheCamera() : null;
             if (_flyingCamera == null || _camera == null)
             {
+                if (_enteredPhotoMode && _master.flyingCamera.isPhotoMode)
+                {
+                    _master.flyingCamera.ToggleFlyingCamera();
+                    _enteredPhotoMode = false;
+                }
+
                 Notify("ZeepCast could not acquire the active flying camera.");
                 return;
             }
 
-            CaptureCameraState();
-            _flyingCameraWasEnabled = _flyingCamera.enabled;
             if (_flyingCamera.currentTarget != null &&
                 _flyingCamera.currentTarget.ghost != null)
             {
                 _selectedSteamId = _flyingCamera.currentTarget.ghost.player.SteamID;
             }
 
-            _flyingCamera.enabled = false;
+            AcquireCameraOwnership();
 
             _spectatorUi = _master.OnlineGameplayUI != null
                 ? _master.OnlineGameplayUI.spectatorUI
@@ -443,6 +620,7 @@ namespace ZeepCast.Core
             _zoomScale = 1f;
             _directorConsoleVisible = _settings.StartWithDirectorConsole.Value;
             _markersVisible = true;
+            _helpVisible = false;
 
             ReadLevelTitle();
             CalculateLevelBounds();
@@ -458,6 +636,7 @@ namespace ZeepCast.Core
             SetInterfaceVisible(true);
             SetDirectorConsoleVisible(_directorConsoleVisible);
             SetMarkersVisible(_markersVisible);
+            SetHelpVisible(false);
 
             ZeepCastPlugin.Log.LogInfo(
                 $"Director activated with {_racers.Count} racers. Bounds: center={_levelBounds.center}, size={_levelBounds.size}");
@@ -471,23 +650,32 @@ namespace ZeepCast.Core
                 return;
             }
 
+            var shouldExitOwnedPhotoMode =
+                restoreCamera &&
+                _enteredPhotoMode &&
+                _master != null &&
+                _master.flyingCamera != null &&
+                _master.flyingCamera.isPhotoMode;
+            var photoModeStillActive =
+                _master != null &&
+                _master.flyingCamera != null &&
+                _master.flyingCamera.isPhotoMode;
+
             _active = false;
             _hud?.SetVisible(false);
             _solidRacerPresentation?.Restore();
             _selectedRacerVisibility?.Restore();
             _nativeSpectatorGraphics.Restore();
+            ReleaseCameraOwnership(restoreCamera);
 
-            if (restoreCamera)
-            {
-                RestoreCameraState();
-            }
-
-            if (_flyingCamera != null)
-            {
-                _flyingCamera.enabled = _flyingCameraWasEnabled;
-            }
-
-            if (_spectatorUi != null && _spectatorUiWasOpen && !_spectatorUi.IsOpen)
+            // Restore the stock spectator surface only when ZeepCast borrowed
+            // an already-active photo-mode session. Reopening it after Back to
+            // Race produces a stranded free-camera overlay over race chrome.
+            if (_spectatorUi != null &&
+                _spectatorUiWasOpen &&
+                photoModeStillActive &&
+                !shouldExitOwnedPhotoMode &&
+                !_spectatorUi.IsOpen)
             {
                 _spectatorUi.Open(announce: false);
             }
@@ -495,9 +683,18 @@ namespace ZeepCast.Core
             Cursor.lockState = _cursorLockMode;
             Cursor.visible = _cursorVisible;
 
-            if (_enteredPhotoMode)
+            if (shouldExitOwnedPhotoMode)
             {
-                Notify("ZeepCast released the camera; Zeepkist photo mode remains active.");
+                try
+                {
+                    _master!.flyingCamera!.ToggleFlyingCamera();
+                    Notify("ZeepCast returned control to the race.");
+                }
+                catch (Exception exception)
+                {
+                    ZeepCastPlugin.Log.LogWarning(
+                        $"Could not leave Zeepkist photo mode cleanly: {exception.Message}");
+                }
             }
 
             _camera = null;
@@ -508,11 +705,26 @@ namespace ZeepCast.Core
             _enteredPhotoMode = false;
             _visualizationWasActive = false;
             _hudAutoHiddenOutsideVisualization = false;
+            _helpVisible = false;
+            ResetFollowTracking();
         }
 
         private void UpdateVisualizationState()
         {
             var visualizationActive = IsVisualizationActive;
+            var photoModeActive =
+                _master != null &&
+                _master.flyingCamera != null &&
+                _master.flyingCamera.isPhotoMode;
+
+            // Once Zeepkist has completed its own Back to Race transition,
+            // ZeepCast no longer owns that photo-mode session. Keeping the
+            // director armed still permits an explicit F9 graphics overlay.
+            if (!photoModeActive)
+            {
+                _enteredPhotoMode = false;
+            }
+
             if (visualizationActive == _visualizationWasActive)
             {
                 return;
@@ -524,11 +736,7 @@ namespace ZeepCast.Core
                 _solidRacerPresentation?.Restore();
                 _selectedRacerVisibility?.Restore();
                 _nativeSpectatorGraphics.Restore();
-                RestoreCameraState();
-                if (_flyingCamera != null)
-                {
-                    _flyingCamera.enabled = _flyingCameraWasEnabled;
-                }
+                ReleaseCameraOwnership(restoreCamera: photoModeActive);
                 if (_uiVisible)
                 {
                     _hudAutoHiddenOutsideVisualization = true;
@@ -538,12 +746,7 @@ namespace ZeepCast.Core
                 return;
             }
 
-            CaptureCameraState();
-            if (_flyingCamera != null)
-            {
-                _flyingCameraWasEnabled = _flyingCamera.enabled;
-                _flyingCamera.enabled = false;
-            }
+            AcquireCameraOwnership();
             _solidRacerPresentation?.Begin();
             if (_camera != null)
             {
@@ -554,6 +757,39 @@ namespace ZeepCast.Core
                 _hudAutoHiddenOutsideVisualization = false;
                 SetInterfaceVisible(true);
             }
+        }
+
+        private void AcquireCameraOwnership()
+        {
+            if (_cameraOwned || _camera == null || _flyingCamera == null)
+            {
+                return;
+            }
+
+            CaptureCameraState();
+            _flyingCameraWasEnabled = _flyingCamera.enabled;
+            _flyingCamera.enabled = false;
+            _cameraOwned = true;
+        }
+
+        private void ReleaseCameraOwnership(bool restoreCamera)
+        {
+            if (!_cameraOwned)
+            {
+                return;
+            }
+
+            if (restoreCamera)
+            {
+                RestoreCameraState();
+            }
+
+            if (_flyingCamera != null)
+            {
+                _flyingCamera.enabled = _flyingCameraWasEnabled;
+            }
+
+            _cameraOwned = false;
         }
 
         private void SetInterfaceVisible(bool visible)
@@ -593,6 +829,12 @@ namespace ZeepCast.Core
         {
             _markersVisible = visible;
             _hud?.SetMarkersVisible(visible);
+        }
+
+        private void SetHelpVisible(bool visible)
+        {
+            _helpVisible = visible;
+            _hud?.SetHelpVisible(visible);
         }
 
         private void CaptureCameraState()
@@ -1023,6 +1265,31 @@ namespace ZeepCast.Core
             }
 
             _currentSize = GetBaseViewSize();
+            ResetFollowTracking();
+        }
+
+        private void SelectFollowStyle(FollowShotStyle style)
+        {
+            if (!TryGetSelected(out _))
+            {
+                Notify("ZeepCast is waiting for a racer to follow.");
+                return;
+            }
+
+            FollowStyle = style;
+            CameraMode = BroadcastCameraMode.Follow;
+            _panOffset = Vector3.zero;
+            _zoomScale = 1f;
+            _currentSize = GetBaseViewSize();
+            ResetFollowTracking();
+        }
+
+        private void ResetFollowTracking()
+        {
+            _motionSteamId = 0;
+            _hasMotionSample = false;
+            _smoothedMotionDirection = Vector3.forward;
+            _hasTracksideCameraPosition = false;
         }
 
         private void SelectRelative(int direction)
@@ -1111,6 +1378,16 @@ namespace ZeepCast.Core
                 return;
             }
 
+            if (!_camera.orthographic)
+            {
+                _zoomScale = Mathf.Clamp(
+                    _zoomScale * Mathf.Pow(0.86f, wheelDelta),
+                    0.4f,
+                    2.5f);
+                _hasTracksideCameraPosition = false;
+                return;
+            }
+
             var previousSize = _currentSize;
             var nextSize = Mathf.Clamp(
                 previousSize * Mathf.Pow(0.8f, wheelDelta),
@@ -1154,8 +1431,11 @@ namespace ZeepCast.Core
 
             var right = Vector3.ProjectOnPlane(_camera.transform.right, Vector3.up).normalized;
             var screenUp = Vector3.ProjectOnPlane(_camera.transform.up, Vector3.up).normalized;
-            var worldPerPixel = 2f * Mathf.Max(MinimumViewSize, _camera.orthographicSize) /
-                                Screen.height;
+            var verticalSpan = _camera.orthographic
+                ? 2f * Mathf.Max(MinimumViewSize, _camera.orthographicSize)
+                : 2f * Mathf.Max(1f, Vector3.Distance(_camera.transform.position, _currentPivot)) *
+                  Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            var worldPerPixel = verticalSpan / Screen.height;
             _panOffset -=
                 (right * delta.x + screenUp * delta.y) *
                 worldPerPixel *
@@ -1169,6 +1449,12 @@ namespace ZeepCast.Core
             _pitch = Mathf.Clamp(_settings.Pitch.Value, 12f, 88f);
             _zoomScale = 1f;
             _currentSize = GetBaseViewSize();
+            ResetFollowTracking();
+        }
+
+        private static bool IsPressed(BepInEx.Configuration.ConfigEntry<KeyCode> setting)
+        {
+            return setting.Value != KeyCode.None && Input.GetKeyDown(setting.Value);
         }
 
         private float GetBaseViewSize()
