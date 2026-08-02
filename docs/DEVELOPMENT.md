@@ -65,6 +65,8 @@ src/ZeepCast/
     BroadcastDirector.cs
     RacerSnapshot.cs
   Rendering/
+    NativeSpectatorGraphics.cs
+    SelectedRacerVisibility.cs
     SolidRacerPresentation.cs
   UI/
     BroadcastHud.cs
@@ -78,15 +80,18 @@ See [Architecture](ARCHITECTURE.md) for responsibilities and lifecycle.
 At minimum, test:
 
 1. Activation and exit in a multiplayer level
-2. Overview and follow views
-3. Deep zoom, cursor focus, pan, orbit, reset, and roster scrolling
+2. Overview, live-field, and follow views
+3. Deep zoom, cursor focus, pan, orbit, reset, roster scrolling, and Follow
+   side/lead/height modifiers
 4. Racer selection by tile, marker, and keyboard
 5. Multiple attempts after a racer finishes
-6. Pause menu, return to visualization, and Return to Racing
-7. F9 automatic behavior and manual override
+6. Direct F6 exit, repeated entry, pause menu, return to visualization, and
+   Back to Race
+7. Clean feed, racer-label toggle, F9 automatic behavior, and manual override
 8. Host and non-host observer sessions
 9. Player join/leave while the director is open
-10. Restoration of cursor, camera, materials, and settings on exit
+10. Restoration of cursor, vanilla HUD, one playable local kart, camera
+    controller, stock spectator graphics, materials, and settings on exit
 
 ## Working with game behavior
 
@@ -97,12 +102,10 @@ finding required to explain original miniZeep code.
 
 ## Release hygiene
 
-Before committing:
+Before committing, run the repository gate:
 
 ```powershell
-dotnet build miniZeep.sln -c Release
-git diff --check
-git status --short
+.\tools\verify-release.ps1
 ```
 
 Review every new file. Do not use broad staging from a mixed external

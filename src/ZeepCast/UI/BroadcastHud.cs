@@ -32,6 +32,12 @@ namespace ZeepCast.UI
         private BroadcastDirector _director = null!;
         private RectTransform _canvas = null!;
         private RectTransform _markerLayer = null!;
+        private RectTransform _topBar = null!;
+        private RectTransform _classificationPanel = null!;
+        private RectTransform _selectedPanel = null!;
+        private RectTransform _directorPanel = null!;
+        private RectTransform _helpPanel = null!;
+        private RectTransform _controlReference = null!;
         private RectTransform _rosterContent = null!;
         private RectTransform _rosterViewport = null!;
         private ScrollRect _rosterScroll = null!;
@@ -39,13 +45,26 @@ namespace ZeepCast.UI
         private Text _levelTitle = null!;
         private Text _clock = null!;
         private Text _mode = null!;
+        private Text _liveState = null!;
+        private RectTransform _liveBadge = null!;
         private Text _rosterHeader = null!;
+        private Text _rosterEmpty = null!;
         private Text _selectedName = null!;
         private Text _selectedStats = null!;
         private Text _selectedStatus = null!;
+        private Image _selectedAccent = null!;
+        private Text _fieldTotals = null!;
+        private Text _directorTarget = null!;
+        private Text _directorShot = null!;
+        private Text _directorKeys = null!;
         private float _nextRefresh;
         private bool _initialized;
         private bool _visible;
+        private bool _directorConsoleVisible = true;
+        private bool _markersVisible = true;
+        private bool _helpVisible;
+        private int _layoutWidth;
+        private int _layoutHeight;
 
         private readonly Dictionary<ulong, RacerTile> _tiles = new();
         private readonly Dictionary<ulong, RacerMarker> _markers = new();
@@ -92,11 +111,35 @@ namespace ZeepCast.UI
             {
                 _canvas.gameObject.SetActive(visible);
             }
+
+            if (visible)
+            {
+                ApplyResponsiveLayout(force: true);
+                ApplySurfaceVisibility();
+            }
+        }
+
+        public void SetDirectorConsoleVisible(bool visible)
+        {
+            _directorConsoleVisible = visible;
+            ApplySurfaceVisibility();
+        }
+
+        public void SetMarkersVisible(bool visible)
+        {
+            _markersVisible = visible;
+            ApplySurfaceVisibility();
+        }
+
+        public void SetHelpVisible(bool visible)
+        {
+            _helpVisible = visible;
+            ApplySurfaceVisibility();
         }
 
         private void Update()
         {
-            if (!_initialized || !_visible || !_director.IsActive)
+            if (!_initialized || !_visible || !_director.IsSessionActive)
             {
                 return;
             }
@@ -110,6 +153,7 @@ namespace ZeepCast.UI
 
             HandleRosterScrolling();
             UpdateMarkerPositions();
+            ApplyResponsiveLayout(force: false);
         }
 
         private void Build()
@@ -121,6 +165,7 @@ namespace ZeepCast.UI
             BuildTopBar();
             BuildRoster();
             BuildSelectedCard();
+            BuildDirectorConsole();
             BuildHelp();
         }
 
@@ -135,6 +180,7 @@ namespace ZeepCast.UI
         private void BuildTopBar()
         {
             var bar = UiFactory.CreatePanel(_canvas, "BroadcastHeader", UiFactory.Panel, false);
+            _topBar = bar;
             bar.anchorMin = new Vector2(0f, 1f);
             bar.anchorMax = new Vector2(1f, 1f);
             bar.pivot = new Vector2(0.5f, 1f);
@@ -155,7 +201,7 @@ namespace ZeepCast.UI
                 _eventTitle.rectTransform,
                 new Vector2(0f, 0.5f),
                 new Vector2(0f, 0.5f),
-                new Vector2(380f, 58f),
+                new Vector2(250f, 58f),
                 new Vector2(24f, 3f));
 
             _levelTitle = UiFactory.CreateText(
@@ -185,11 +231,30 @@ namespace ZeepCast.UI
                 new Vector2(1f, 0.5f),
                 new Vector2(180f, 58f),
                 new Vector2(-24f, 3f));
+
+            var liveBadge = UiFactory.CreatePanel(
+                bar,
+                "LiveBadge",
+                new Color(UiFactory.Danger.r, UiFactory.Danger.g, UiFactory.Danger.b, 0.18f),
+                false);
+            _liveBadge = liveBadge;
+            UiFactory.Anchor(
+                liveBadge,
+                new Vector2(0f, 0.5f),
+                new Vector2(0f, 0.5f),
+                new Vector2(72f, 28f),
+                new Vector2(286f, 2f));
+
+            _liveState = UiFactory.CreateText(
+                liveBadge, "LiveState", "● LIVE", 11, FontStyle.Bold,
+                TextAnchor.MiddleCenter, UiFactory.Danger);
+            UiFactory.Stretch(_liveState.rectTransform, 4f, 2f, 4f, 2f);
         }
 
         private void BuildRoster()
         {
             var panel = UiFactory.CreatePanel(_canvas, "RacerRoster", UiFactory.Panel, true);
+            _classificationPanel = panel;
             panel.anchorMin = new Vector2(0f, 0f);
             panel.anchorMax = new Vector2(0f, 1f);
             panel.pivot = new Vector2(0f, 0.5f);
@@ -197,7 +262,7 @@ namespace ZeepCast.UI
             panel.anchoredPosition = new Vector2(18f, -18f);
 
             _rosterHeader = UiFactory.CreateText(
-                panel, "RosterHeader", "RACERS", 18, FontStyle.Bold,
+                panel, "RosterHeader", "CLASSIFICATION", 18, FontStyle.Bold,
                 TextAnchor.MiddleLeft, UiFactory.Ink);
             _rosterHeader.rectTransform.anchorMin = new Vector2(0f, 1f);
             _rosterHeader.rectTransform.anchorMax = new Vector2(1f, 1f);
@@ -211,6 +276,16 @@ namespace ZeepCast.UI
             _rosterViewport.anchorMax = Vector2.one;
             _rosterViewport.offsetMin = new Vector2(12f, 12f);
             _rosterViewport.offsetMax = new Vector2(-24f, -62f);
+
+            _rosterEmpty = UiFactory.CreateText(
+                _rosterViewport,
+                "EmptyField",
+                "WAITING FOR RACERS\nRemote racers will appear here",
+                14,
+                FontStyle.Bold,
+                TextAnchor.MiddleCenter,
+                UiFactory.TextMuted);
+            UiFactory.Stretch(_rosterEmpty.rectTransform, 18f, 18f, 18f, 18f);
 
             var contentObject = new GameObject(
                 "Content",
@@ -293,6 +368,7 @@ namespace ZeepCast.UI
         private void BuildSelectedCard()
         {
             var panel = UiFactory.CreatePanel(_canvas, "SelectedRacer", UiFactory.Panel, false);
+            _selectedPanel = panel;
             UiFactory.Anchor(
                 panel,
                 new Vector2(0.5f, 0f),
@@ -301,6 +377,7 @@ namespace ZeepCast.UI
                 new Vector2(120f, 22f));
 
             var accent = UiFactory.CreatePanel(panel, "Accent", UiFactory.Accent, false);
+            _selectedAccent = accent.GetComponent<Image>();
             accent.anchorMin = new Vector2(0f, 0f);
             accent.anchorMax = new Vector2(0f, 1f);
             accent.pivot = new Vector2(0f, 0.5f);
@@ -338,6 +415,76 @@ namespace ZeepCast.UI
                 new Vector2(-20f, 0f));
         }
 
+        private void BuildDirectorConsole()
+        {
+            _directorPanel = UiFactory.CreatePanel(
+                _canvas,
+                "DirectorConsole",
+                UiFactory.Surface,
+                false);
+            UiFactory.Anchor(
+                _directorPanel,
+                new Vector2(1f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(286f, 286f),
+                new Vector2(-18f, -96f));
+
+            var eyebrow = UiFactory.CreateText(
+                _directorPanel, "Eyebrow", "RACE CONTROL", 12, FontStyle.Bold,
+                TextAnchor.MiddleLeft, UiFactory.Accent);
+            UiFactory.Anchor(
+                eyebrow.rectTransform,
+                new Vector2(0f, 1f),
+                new Vector2(0f, 1f),
+                new Vector2(240f, 30f),
+                new Vector2(18f, -12f));
+
+            _fieldTotals = UiFactory.CreateText(
+                _directorPanel, "FieldTotals", "FIELD  0", 18, FontStyle.Bold,
+                TextAnchor.UpperLeft, UiFactory.TextPrimary);
+            UiFactory.Anchor(
+                _fieldTotals.rectTransform,
+                new Vector2(0f, 1f),
+                new Vector2(0f, 1f),
+                new Vector2(250f, 80f),
+                new Vector2(18f, -48f));
+
+            _directorShot = UiFactory.CreateText(
+                _directorPanel, "Shot", "SHOT  OVERVIEW", 13, FontStyle.Bold,
+                TextAnchor.MiddleLeft, UiFactory.TextPrimary);
+            UiFactory.Anchor(
+                _directorShot.rectTransform,
+                new Vector2(0f, 1f),
+                new Vector2(0f, 1f),
+                new Vector2(250f, 32f),
+                new Vector2(18f, -130f));
+
+            _directorTarget = UiFactory.CreateText(
+                _directorPanel, "Target", "TARGET  WAITING", 12, FontStyle.Normal,
+                TextAnchor.UpperLeft, UiFactory.TextMuted);
+            UiFactory.Anchor(
+                _directorTarget.rectTransform,
+                new Vector2(0f, 1f),
+                new Vector2(0f, 1f),
+                new Vector2(250f, 48f),
+                new Vector2(18f, -164f));
+
+            _directorKeys = UiFactory.CreateText(
+                _directorPanel,
+                "Keys",
+                "V  NEXT SHOT\n1–4  FOLLOW STYLE\n[ ]  CHANGE TARGET\nH  ALL CONTROLS",
+                11,
+                FontStyle.Bold,
+                TextAnchor.UpperLeft,
+                UiFactory.TextMuted);
+            UiFactory.Anchor(
+                _directorKeys.rectTransform,
+                new Vector2(0f, 1f),
+                new Vector2(0f, 1f),
+                new Vector2(250f, 78f),
+                new Vector2(18f, -210f));
+        }
+
         private void BuildHelp()
         {
             var background = UiFactory.CreatePanel(
@@ -345,22 +492,93 @@ namespace ZeepCast.UI
                 "HelpBackground",
                 new Color(0.015f, 0.025f, 0.05f, 0.58f),
                 false);
+            _helpPanel = background;
             UiFactory.Anchor(
                 background,
                 new Vector2(1f, 0f),
                 new Vector2(1f, 0f),
-                new Vector2(930f, 28f),
+                new Vector2(560f, 32f),
                 new Vector2(-12f, 3f));
 
             var help = UiFactory.CreateText(
                 background,
                 "Help",
-                "F8 EXIT  •  F9 UI  •  TAB VIEW  •  [ ] RACER  •  WASD / MMB PAN  •  RMB ORBIT  •  WHEEL ZOOM  •  R RESET",
+                "F6 EXIT  •  V SHOT  •  1–4 FOLLOW  •  H CONTROLS",
                 11,
                 FontStyle.Bold,
                 TextAnchor.MiddleRight,
                 new Color(0.84f, 0.88f, 0.96f, 0.92f));
             UiFactory.Stretch(help.rectTransform, 12f, 2f, 12f, 2f);
+
+            _controlReference = UiFactory.CreatePanel(
+                _canvas,
+                "ControlReference",
+                new Color(0.015f, 0.025f, 0.05f, 0.94f),
+                false);
+            UiFactory.Anchor(
+                _controlReference,
+                new Vector2(0.5f, 0.5f),
+                new Vector2(0.5f, 0.5f),
+                new Vector2(580f, 590f),
+                Vector2.zero);
+
+            var accent = UiFactory.CreatePanel(
+                _controlReference,
+                "Accent",
+                UiFactory.Accent,
+                false);
+            accent.anchorMin = new Vector2(0f, 1f);
+            accent.anchorMax = new Vector2(1f, 1f);
+            accent.pivot = new Vector2(0.5f, 1f);
+            accent.sizeDelta = new Vector2(0f, 4f);
+            accent.anchoredPosition = Vector2.zero;
+
+            var title = UiFactory.CreateText(
+                _controlReference,
+                "Title",
+                "ZEEPCAST OPERATOR CONTROLS",
+                22,
+                FontStyle.Bold,
+                TextAnchor.MiddleLeft,
+                UiFactory.TextPrimary);
+            UiFactory.Anchor(
+                title.rectTransform,
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(-48f, 54f),
+                new Vector2(24f, -18f));
+
+            var reference = UiFactory.CreateText(
+                _controlReference,
+                "Reference",
+                "DIRECTOR\n" +
+                "F6   Enter / exit ZeepCast\n" +
+                "F9   Broadcast graphics\n" +
+                "`      Clean feed / operator console\n" +
+                "H     Close this reference\n\n" +
+                "SHOTS\n" +
+                "V     Overview / field / follow\n" +
+                "1     Isometric follow\n" +
+                "2     Chase follow\n" +
+                "3     Lead follow\n" +
+                "4     Trackside follow\n" +
+                "[ ]   Previous / next racer\n" +
+                "M     Racer labels\n\n" +
+                "CAMERA — ALL SHOTS\n" +
+                "Wheel   Zoom / distance\n" +
+                "Right mouse   Rotate / orbit\n" +
+                "Middle mouse   Free pan\n" +
+                "R     Reset framing and modifiers\n\n" +
+                "FOLLOW MODIFIERS\n" +
+                "A / D   Camera side bias\n" +
+                "W / S   Target lead / lag\n" +
+                "Q / E   Camera height\n" +
+                "Shift precision   •   Ctrl fast",
+                13,
+                FontStyle.Normal,
+                TextAnchor.UpperLeft,
+                new Color(0.88f, 0.91f, 0.97f, 1f));
+            UiFactory.Stretch(reference.rectTransform, 26f, 78f, 26f, 22f);
         }
 
         private void RefreshChrome()
@@ -368,21 +586,30 @@ namespace ZeepCast.UI
             _eventTitle.text = _director.EventTitle.ToUpperInvariant();
             _levelTitle.text = _director.LevelTitle;
             _clock.text = _director.LobbyClock;
-            _mode.text = _director.CameraMode == BroadcastCameraMode.Overview
-                ? "OVERVIEW"
-                : "FOLLOW";
-            _rosterHeader.text = $"RACERS  {_director.Racers.Count}";
+            _mode.text = _director.ShotLabel;
+            _rosterHeader.text = $"CLASSIFICATION  {_director.Racers.Count}";
+
+            var summary = _director.FieldSummary;
+            _fieldTotals.text =
+                $"FIELD  {summary.Total}\n" +
+                $"<color=#{ColorUtility.ToHtmlStringRGB(UiFactory.Positive)}>●</color> LIVE  {summary.Racing}    FIN  {summary.Finished}\n" +
+                $"<color=#{ColorUtility.ToHtmlStringRGB(UiFactory.Danger)}>●</color> INCIDENTS  {summary.Incidents}    SPEC  {summary.Spectating}";
+            _directorShot.text = $"SHOT  {_director.ShotLabel}";
 
             if (_director.TryGetSelected(out var selected))
             {
                 _selectedName.text = $"P{selected.Position}  {selected.Name}";
                 _selectedName.color = selected.Color;
 
-                var points = selected.Player.ChampionshipPoints.x;
-                var time = selected.Finished ? selected.FinishTime : selected.Runtime;
+                var points = selected.ChampionshipPoints;
+                var time = selected.DisplayTime;
                 _selectedStats.text =
                     $"{selected.Speed} km/h   •   {FormatTime(time)}   •   CP {selected.Checkpoints}   •   {points} pts";
                 _selectedStatus.text = selected.Status;
+                _selectedStatus.color = StatusColor(selected.StatusKind);
+                _selectedAccent.color = selected.Color;
+                _directorTarget.text =
+                    $"TARGET  P{selected.Position} / {summary.Total}\n{selected.Name}";
             }
             else
             {
@@ -390,12 +617,15 @@ namespace ZeepCast.UI
                 _selectedName.color = UiFactory.Ink;
                 _selectedStats.text = "Waiting for remote racers…";
                 _selectedStatus.text = string.Empty;
+                _selectedAccent.color = UiFactory.Accent;
+                _directorTarget.text = "TARGET  WAITING\nNo remote racer available";
             }
         }
 
         private void ReconcileRacers()
         {
             var activeIds = new HashSet<ulong>(_director.Racers.Select(racer => racer.SteamId));
+            _rosterEmpty.gameObject.SetActive(activeIds.Count == 0);
 
             foreach (var staleId in _tiles.Keys.Where(id => !activeIds.Contains(id)).ToArray())
             {
@@ -448,6 +678,16 @@ namespace ZeepCast.UI
             var button = buttonObject.GetComponent<Button>();
             button.targetGraphic = background;
             button.onClick.AddListener(() => _director.SelectRacer(steamId));
+            button.colors = new ColorBlock
+            {
+                normalColor = Color.white,
+                highlightedColor = new Color(1.08f, 1.08f, 1.08f, 1f),
+                pressedColor = new Color(0.78f, 0.82f, 0.9f, 1f),
+                selectedColor = Color.white,
+                disabledColor = new Color(0.5f, 0.5f, 0.5f, 0.7f),
+                colorMultiplier = 1f,
+                fadeDuration = 0.08f
+            };
 
             var colorBar = UiFactory.CreatePanel(root, "Color", Color.white, false).GetComponent<Image>();
             UiFactory.Anchor(
@@ -552,10 +792,15 @@ namespace ZeepCast.UI
             tile.Name.text = racer.Name;
             tile.Name.color = selected ? racer.Color : UiFactory.Ink;
             tile.Telemetry.text =
-                $"{racer.Speed} km/h   {FormatTime(racer.Finished ? racer.FinishTime : racer.Runtime)}   CP {racer.Checkpoints}";
+                $"{racer.Speed} km/h   {FormatTime(racer.DisplayTime)}   {racer.ChampionshipPoints} pts";
             tile.Status.text = racer.Status;
+            tile.Status.color = StatusColor(racer.StatusKind);
             tile.Background.color = selected
-                ? new Color(racer.Color.r * 0.18f, racer.Color.g * 0.18f, racer.Color.b * 0.18f, 0.97f)
+                ? new Color(
+                    Mathf.Lerp(UiFactory.Selected.r, racer.Color.r, 0.16f),
+                    Mathf.Lerp(UiFactory.Selected.g, racer.Color.g, 0.16f),
+                    Mathf.Lerp(UiFactory.Selected.b, racer.Color.b, 0.16f),
+                    0.98f)
                 : UiFactory.PanelLight;
         }
 
@@ -576,7 +821,7 @@ namespace ZeepCast.UI
 
         private void UpdateMarkerPositions()
         {
-            if (!_director.IsVisualizationActive)
+            if (!_director.IsVisualizationActive || !_markersVisible)
             {
                 foreach (var marker in _markers.Values)
                 {
@@ -617,6 +862,101 @@ namespace ZeepCast.UI
                 localPoint.x = Mathf.Clamp(localPoint.x, rect.xMin + 90f, rect.xMax - 90f);
                 localPoint.y = Mathf.Clamp(localPoint.y, rect.yMin + 50f, rect.yMax - 115f);
                 marker.Root.anchoredPosition = localPoint;
+            }
+        }
+
+        private void ApplySurfaceVisibility()
+        {
+            if (!_initialized || _canvas == null)
+            {
+                return;
+            }
+
+            var narrow = Screen.height > 0 && (float)Screen.width / Screen.height < 1.5f;
+            if (_directorPanel != null)
+            {
+                _directorPanel.gameObject.SetActive(_visible && _directorConsoleVisible);
+            }
+
+            if (_helpPanel != null)
+            {
+                _helpPanel.gameObject.SetActive(_visible && _directorConsoleVisible);
+            }
+
+            if (_controlReference != null)
+            {
+                _controlReference.gameObject.SetActive(
+                    _visible && _directorConsoleVisible && _helpVisible);
+            }
+
+            if (_markerLayer != null)
+            {
+                _markerLayer.gameObject.SetActive(_visible && _markersVisible);
+            }
+        }
+
+        private void ApplyResponsiveLayout(bool force)
+        {
+            if (!force && _layoutWidth == Screen.width && _layoutHeight == Screen.height)
+            {
+                return;
+            }
+
+            _layoutWidth = Screen.width;
+            _layoutHeight = Screen.height;
+            var aspect = Screen.height > 0 ? (float)Screen.width / Screen.height : 16f / 9f;
+            var narrow = aspect < 1.5f;
+            var ultrawide = aspect > 2.05f;
+
+            _classificationPanel.sizeDelta = new Vector2(narrow ? 286f : 366f, -112f);
+            _classificationPanel.anchoredPosition = new Vector2(18f, -18f);
+
+            _selectedPanel.sizeDelta = new Vector2(narrow ? 500f : 650f, narrow ? 86f : 96f);
+            _selectedPanel.anchoredPosition = new Vector2(narrow ? 38f : 120f, 22f);
+
+            _directorPanel.sizeDelta = new Vector2(narrow ? 250f : 286f, 286f);
+            _directorPanel.anchoredPosition = new Vector2(-18f, -96f);
+
+            _helpPanel.sizeDelta = new Vector2(560f, 32f);
+            _helpPanel.anchoredPosition = new Vector2(-12f, 3f);
+
+            _controlReference.sizeDelta = new Vector2(narrow ? 500f : 560f, 510f);
+
+            _liveBadge.gameObject.SetActive(!narrow);
+            _levelTitle.rectTransform.anchorMin = new Vector2(narrow ? 0.27f : 0.25f, 0f);
+            _levelTitle.rectTransform.anchorMax = new Vector2(narrow ? 0.72f : 0.75f, 1f);
+
+            ApplySurfaceVisibility();
+        }
+
+        private static string CameraModeLabel(BroadcastCameraMode mode)
+        {
+            switch (mode)
+            {
+                case BroadcastCameraMode.Field:
+                    return "FIELD";
+                case BroadcastCameraMode.Follow:
+                    return "FOLLOW";
+                default:
+                    return "OVERVIEW";
+            }
+        }
+
+        private static Color StatusColor(RacerStatusKind status)
+        {
+            switch (status)
+            {
+                case RacerStatusKind.Finished:
+                    return UiFactory.Positive;
+                case RacerStatusKind.Crashed:
+                    return UiFactory.Danger;
+                case RacerStatusKind.Damaged:
+                case RacerStatusKind.Braking:
+                    return UiFactory.Warning;
+                case RacerStatusKind.Spectating:
+                    return UiFactory.TextMuted;
+                default:
+                    return UiFactory.Accent;
             }
         }
 

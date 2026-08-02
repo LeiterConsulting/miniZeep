@@ -15,13 +15,15 @@ miniZeep should be:
 1. `ZeepCastPlugin` registers configuration and creates one persistent
    `BroadcastDirector`.
 2. The director waits for explicit activation in `GameScene`.
-3. It uses Zeepkist's allowed local photo-mode transition and captures camera,
-   cursor, spectator UI, renderer, material, and graphics-setting state.
+3. It captures the pre-photo-mode cursor and race-UI state, then uses
+   Zeepkist's allowed local photo-mode transition and captures camera,
+   spectator presentation, renderer, material, and graphics-setting state.
 4. It calculates level bounds from loaded block metadata.
 5. It reads the existing network player list into `RacerSnapshot` objects.
-6. `BroadcastHud` renders the roster, markers, header, and selected-racer card.
+6. `BroadcastHud` renders program graphics and the independent operator console.
 7. The director moves only the local spectator camera.
-8. On exit or scene unload, captured state is restored.
+8. On photo-mode exit, pause, explicit exit, or scene unload, each captured
+   presentation and camera state is restored at its ownership boundary.
 
 ## Components
 
@@ -34,17 +36,27 @@ miniZeep should be:
 `Core/BroadcastDirector.cs` owns:
 
 - Activation and cleanup
-- Overview/follow camera modes
+- Overview and live-field isometric modes plus motion-aware isometric, chase,
+  lead, and damped-dolly trackside follow shots
+- Shared Follow distance, orbit/pitch, side, lead/lag, and height modifiers
 - Camera input and framing
 - Level bounds
 - Racer discovery and ordering
 - Current-attempt finish-state tracking
 - Pause/photo-mode transitions
 - Camera culling-distance adjustments
+- Native spectator-graphics ownership while the program view is active
 
-The director deliberately separates "director active" from "visualization
+The director deliberately separates "session armed" from "program-view
 active." This permits F9 to show telemetry over normal gameplay while camera
-input and world markers remain disabled outside the isometric view.
+input and world markers remain disabled and other HUD mods retain race chrome.
+Camera ownership is acquired only for the program view and released before
+Zeepkist processes pause-menu transitions. F6 exits native photo mode only when
+ZeepCast entered it. ZeepCast never manually closes `SpectatorCameraUI`; doing
+so would desynchronize `BaseUI.IsOpen` from `UIManager`'s active stack. It hides
+only the stock visual holder and lets the native photo-mode exit unregister the
+spectator surface and reopen `OnlineGameplayUI`. A bounded post-restart check
+reopens race children only when the lobby is in its normal racing state.
 
 ### RacerSnapshot
 
@@ -55,16 +67,35 @@ network player and remote racer representation but contains no network logic.
 
 `Rendering/SolidRacerPresentation.cs` reverses Zeepkist's translucent remote
 ghost presentation for live racers. It caches every renderer, material, fader,
-and relevant setting before changing it.
+and relevant setting before changing it. It excludes the local Steam ID and
+never force-enables a ghost root; the game remains authoritative for object
+visibility and local-kart spawning.
 
 Remote multiplayer racers are represented by
 `NetworkedZeepkistGhost.ghostModel`; there is not a second independent "live
 racer" object to discover.
 
+### SelectedRacerVisibility
+
+`Rendering/SelectedRacerVisibility.cs` adds a camera-local command buffer that
+draws only the selected racer fragments hidden by geometry. It never changes
+track materials and removes the pass immediately when selection, scene, or
+camera ownership changes.
+
+### NativeSpectatorGraphics
+
+`Rendering/NativeSpectatorGraphics.cs` temporarily suppresses the stock flying
+camera presentation surface so it cannot leak operator instructions into the
+program feed. It records and restores the original active state and does not
+depend on ZeepSDK internals.
+
 ### BroadcastHud and UiFactory
 
 `UI/BroadcastHud.cs` builds a resolution-independent uGUI interface in code.
 `UI/UiFactory.cs` contains the small construction helpers and shared colors.
+The header, classification, selected-racer lower third, and markers are program
+graphics. Race Control and the help strip are operator surfaces and can be
+hidden independently.
 
 ## Multiplayer and authority
 

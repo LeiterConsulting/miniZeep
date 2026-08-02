@@ -12,7 +12,7 @@ namespace ZeepCast
     {
         public const string PluginGuid = "com.chris.zeepcast";
         public const string PluginName = "ZeepCast";
-        public const string PluginVersion = "0.1.0";
+        public const string PluginVersion = "0.3.0";
 
         internal static ManualLogSource Log { get; private set; } = null!;
 
@@ -24,16 +24,30 @@ namespace ZeepCast
             DontDestroyOnLoad(gameObject);
 
             var settings = new BroadcastSettings(
-                Config.Bind("Controls", "ToggleDirector", new KeyboardShortcut(KeyCode.F8),
+                Config.Bind("Controls", "ToggleDirector", KeyCode.F6,
                     "Enter or leave the ZeepCast director."),
-                Config.Bind("Controls", "ToggleInterface", new KeyboardShortcut(KeyCode.F9),
+                Config.Bind("Controls", "ToggleInterface", KeyCode.F9,
                     "Show or hide the broadcast interface and racer markers."),
-                Config.Bind("Controls", "ToggleCameraMode", new KeyboardShortcut(KeyCode.Tab),
-                    "Switch between whole-level overview and followed-racer camera modes."),
-                Config.Bind("Controls", "PreviousRacer", new KeyboardShortcut(KeyCode.LeftBracket),
+                Config.Bind("Controls", "ToggleDirectorConsole", KeyCode.BackQuote,
+                    "Show or hide operator-only controls while keeping program graphics visible."),
+                Config.Bind("Controls", "ToggleMarkers", KeyCode.M,
+                    "Show or hide on-track racer labels."),
+                Config.Bind("Controls", "ToggleCameraMode", KeyCode.V,
+                    "Cycle overview, live-field, and followed-racer camera shots."),
+                Config.Bind("Controls", "PreviousRacer", KeyCode.LeftBracket,
                     "Follow the previous racer."),
-                Config.Bind("Controls", "NextRacer", new KeyboardShortcut(KeyCode.RightBracket),
+                Config.Bind("Controls", "NextRacer", KeyCode.RightBracket,
                     "Follow the next racer."),
+                Config.Bind("Controls", "ToggleHelp", KeyCode.H,
+                    "Show or hide the complete operator control reference."),
+                Config.Bind("Controls", "FollowIsometric", KeyCode.Alpha1,
+                    "Select the isometric racer-following shot."),
+                Config.Bind("Controls", "FollowChase", KeyCode.Alpha2,
+                    "Select the chase racer-following shot."),
+                Config.Bind("Controls", "FollowLead", KeyCode.Alpha3,
+                    "Select the lead racer-following shot."),
+                Config.Bind("Controls", "FollowTrackside", KeyCode.Alpha4,
+                    "Select the trackside racer-following shot."),
                 Config.Bind("Broadcast", "EventTitle", "ZEEPKIST LIVE",
                     "Title displayed in the broadcast header."),
                 Config.Bind("Camera", "Pitch", 48f,
@@ -44,12 +58,18 @@ namespace ZeepCast
                     "Orthographic size used while following a racer."),
                 Config.Bind("Camera", "OverviewPadding", 1.18f,
                     "Extra space around the level in overview mode."),
+                Config.Bind("Camera", "FieldPadding", 1.3f,
+                    "Extra space around the live racer group in field mode."),
                 Config.Bind("Camera", "PositionSmoothing", 6f,
                     "How quickly the follow camera catches its racer."),
                 Config.Bind("Camera", "AutoEnterPhotoMode", true,
                     "Use Zeepkist's native photo-mode transition when ZeepCast is activated."),
                 Config.Bind("Rendering", "ForceSolidRacers", true,
-                    "Render remote live racers with their original cosmetic materials instead of Zeepkist's translucent ghost material.")
+                    "Render remote live racers with their original cosmetic materials instead of Zeepkist's translucent ghost material."),
+                Config.Bind("Rendering", "HighlightSelectedRacer", true,
+                    "Draw a subtle local silhouette where the selected racer is hidden by track geometry."),
+                Config.Bind("Broadcast", "StartWithDirectorConsole", true,
+                    "Show operator controls when ZeepCast starts. Press the console key for a clean feed.")
             );
 
             _director = gameObject.AddComponent<BroadcastDirector>();
@@ -70,47 +90,77 @@ namespace ZeepCast
     internal sealed class BroadcastSettings
     {
         public BroadcastSettings(
-            ConfigEntry<KeyboardShortcut> toggleDirector,
-            ConfigEntry<KeyboardShortcut> toggleInterface,
-            ConfigEntry<KeyboardShortcut> toggleCameraMode,
-            ConfigEntry<KeyboardShortcut> previousRacer,
-            ConfigEntry<KeyboardShortcut> nextRacer,
+            ConfigEntry<KeyCode> toggleDirector,
+            ConfigEntry<KeyCode> toggleInterface,
+            ConfigEntry<KeyCode> toggleDirectorConsole,
+            ConfigEntry<KeyCode> toggleMarkers,
+            ConfigEntry<KeyCode> toggleCameraMode,
+            ConfigEntry<KeyCode> previousRacer,
+            ConfigEntry<KeyCode> nextRacer,
+            ConfigEntry<KeyCode> toggleHelp,
+            ConfigEntry<KeyCode> followIsometric,
+            ConfigEntry<KeyCode> followChase,
+            ConfigEntry<KeyCode> followLead,
+            ConfigEntry<KeyCode> followTrackside,
             ConfigEntry<string> eventTitle,
             ConfigEntry<float> pitch,
             ConfigEntry<float> yaw,
             ConfigEntry<float> followSize,
             ConfigEntry<float> overviewPadding,
+            ConfigEntry<float> fieldPadding,
             ConfigEntry<float> positionSmoothing,
             ConfigEntry<bool> autoEnterPhotoMode,
-            ConfigEntry<bool> forceSolidRacers)
+            ConfigEntry<bool> forceSolidRacers,
+            ConfigEntry<bool> highlightSelectedRacer,
+            ConfigEntry<bool> startWithDirectorConsole)
         {
             ToggleDirector = toggleDirector;
             ToggleInterface = toggleInterface;
+            ToggleDirectorConsole = toggleDirectorConsole;
+            ToggleMarkers = toggleMarkers;
             ToggleCameraMode = toggleCameraMode;
             PreviousRacer = previousRacer;
             NextRacer = nextRacer;
+            ToggleHelp = toggleHelp;
+            FollowIsometric = followIsometric;
+            FollowChase = followChase;
+            FollowLead = followLead;
+            FollowTrackside = followTrackside;
             EventTitle = eventTitle;
             Pitch = pitch;
             Yaw = yaw;
             FollowSize = followSize;
             OverviewPadding = overviewPadding;
+            FieldPadding = fieldPadding;
             PositionSmoothing = positionSmoothing;
             AutoEnterPhotoMode = autoEnterPhotoMode;
             ForceSolidRacers = forceSolidRacers;
+            HighlightSelectedRacer = highlightSelectedRacer;
+            StartWithDirectorConsole = startWithDirectorConsole;
         }
 
-        public ConfigEntry<KeyboardShortcut> ToggleDirector { get; }
-        public ConfigEntry<KeyboardShortcut> ToggleInterface { get; }
-        public ConfigEntry<KeyboardShortcut> ToggleCameraMode { get; }
-        public ConfigEntry<KeyboardShortcut> PreviousRacer { get; }
-        public ConfigEntry<KeyboardShortcut> NextRacer { get; }
+        public ConfigEntry<KeyCode> ToggleDirector { get; }
+        public ConfigEntry<KeyCode> ToggleInterface { get; }
+        public ConfigEntry<KeyCode> ToggleDirectorConsole { get; }
+        public ConfigEntry<KeyCode> ToggleMarkers { get; }
+        public ConfigEntry<KeyCode> ToggleCameraMode { get; }
+        public ConfigEntry<KeyCode> PreviousRacer { get; }
+        public ConfigEntry<KeyCode> NextRacer { get; }
+        public ConfigEntry<KeyCode> ToggleHelp { get; }
+        public ConfigEntry<KeyCode> FollowIsometric { get; }
+        public ConfigEntry<KeyCode> FollowChase { get; }
+        public ConfigEntry<KeyCode> FollowLead { get; }
+        public ConfigEntry<KeyCode> FollowTrackside { get; }
         public ConfigEntry<string> EventTitle { get; }
         public ConfigEntry<float> Pitch { get; }
         public ConfigEntry<float> Yaw { get; }
         public ConfigEntry<float> FollowSize { get; }
         public ConfigEntry<float> OverviewPadding { get; }
+        public ConfigEntry<float> FieldPadding { get; }
         public ConfigEntry<float> PositionSmoothing { get; }
         public ConfigEntry<bool> AutoEnterPhotoMode { get; }
         public ConfigEntry<bool> ForceSolidRacers { get; }
+        public ConfigEntry<bool> HighlightSelectedRacer { get; }
+        public ConfigEntry<bool> StartWithDirectorConsole { get; }
     }
 }

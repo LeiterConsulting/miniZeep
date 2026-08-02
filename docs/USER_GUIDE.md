@@ -22,8 +22,8 @@ The first launch creates a BepInEx configuration file for the plugin.
 
 While a level is running:
 
-- Press `F8` to enter ZeepCast.
-- Press `F8` again to release the director camera.
+- Press `F6` to enter ZeepCast.
+- Press `F6` again to return fully to the race when ZeepCast entered photo mode.
 - Press `Escape` to open Zeepkist's menu. The broadcast HUD hides by default.
 - Choose Return to Racing to leave the visualization and keep the HUD hidden.
 - Press `F9` if you intentionally want the broadcast HUD over normal gameplay.
@@ -35,16 +35,32 @@ cannot activate instead of trying to bypass the lobby setting.
 
 | Input | Action |
 | --- | --- |
-| `Tab` | Switch between whole-track overview and racer follow |
+| `V` | Cycle Overview, Field, and Follow shots |
+| `1` | Follow the selected racer with the isometric camera |
+| `2` | Follow from a motion-aware chase camera |
+| `3` | Place a motion-aware camera ahead of the racer |
+| `4` | Use a damped trackside dolly that travels with the racer |
+| `H` | Show or hide the complete operator control reference |
 | `[` / `]` | Select the previous or next racer |
 | Click racer tile or marker | Select and follow that racer |
-| `W A S D` | Pan relative to camera heading |
+| `W A S D` | Pan Overview/Field; adjust lead/lag and side bias in Follow |
+| `Q E` | Lower or raise the Follow camera |
 | Middle mouse drag | Drag the map |
 | Right mouse drag | Orbit and change pitch |
 | Mouse wheel | Zoom toward the cursor |
 | `Shift` | Make the active camera input more precise |
 | `Ctrl` | Make the active camera input faster |
-| `R` | Reset zoom, orbit, and pan |
+| `R` | Reset zoom, orbit, pan, and Follow modifiers |
+
+Overview fits the course. Field follows the bounds of racers still competing.
+Follow tracks the selected racer. The numbered keys select a follow style
+directly and switch to Follow without adding another interface panel. Chase,
+Lead, and Trackside infer the racer's direction from recent motion. Trackside
+uses a damped subject-and-camera dolly rather than snapping between placements.
+In every Follow style, the wheel adjusts distance, right-drag changes orbit and
+pitch, `A`/`D` adds side bias, `W`/`S` changes lead or lag, and `Q`/`E` changes
+height. When no racer is available, the camera skips Follow instead of showing
+a misleading empty view.
 
 The mouse wheel scrolls the roster instead of zooming when the pointer is over
 the racer list.
@@ -56,7 +72,20 @@ the racer list.
 - Clicking a racer changes to follow mode.
 - On-track labels identify racers in the overview.
 - The bottom card contains expanded information for the selected racer.
+- Backquote (`` ` ``) hides Race Control and the help strip while retaining
+  viewer-facing program graphics.
+- `M` controls racer labels independently.
 - `F9` hides or restores the entire broadcast interface.
+- The persistent legend contains only essential controls. Press `H` for the
+  complete operator reference.
+
+ZeepCast suppresses Zeepkist's stock flying-camera labels only while it owns
+the isometric program view and restores their prior state on release.
+
+ZeepCast leaves Zeepkist's spectator UI controller registered while hiding only
+its visual holder. Direct `F6` exit and Pause Menu → Back to Race therefore
+return through the native UI lifecycle, restore the race HUD, and leave exactly
+one playable local kart.
 
 A previous leaderboard result does not permanently mark a racer as finished.
 Finish state resets when that racer begins another attempt.
@@ -70,9 +99,15 @@ Open the generated BepInEx configuration file for ZeepCast to change:
 - Starting pitch and yaw
 - Follow view size
 - Overview padding
+- Live-field padding
 - Camera smoothing
 - Automatic photo-mode entry
 - Solid live-racer presentation
+- Selected-racer occlusion highlighting
+- Whether Race Control is visible on activation
+
+These settings also appear in ZeepSDK's mod settings page. Control bindings use
+ZeepSDK-compatible key editors.
 
 ## Troubleshooting
 
