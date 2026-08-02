@@ -4,10 +4,14 @@ This document defines the finite target for the spectator-first ZeepCast
 release. It is a completion contract, not an open-ended roadmap. Work outside
 these slices belongs in `ROADMAP.md` after this release is accepted.
 
-**Release status:** implemented for 0.2.0. The automated release gate and a
-local end-to-end spectator smoke test pass. Multiplayer racer, join/leave, and
-non-host behavior remain part of the community compatibility matrix because
-they require a live multi-client session.
+**Release status:** accepted for 0.3.0. The automated release gate and a live
+non-host multiplayer acceptance pass cover all four Follow styles, zoom,
+repeated entry, direct exit, Pause Menu → Back to Race, optional `F9` race
+graphics, vanilla HUD restoration, player join, and the absence of rejected
+host-command spam.
+
+The release is complete when these six slices pass; additional modes, UI,
+scoring, replay, and automation belong in the roadmap.
 
 ## Product outcome
 
@@ -48,10 +52,14 @@ Success criteria:
 - `V` cycles three named shots: `OVERVIEW`, `FIELD`, and `FOLLOW`.
 - Overview fits the loaded course; Field continuously fits the live racer
   group; Follow tracks the selected racer using Isometric, Chase, Lead, or
-  repositioning Trackside composition selected directly with `1`–`4`.
+  damped-dolly Trackside composition selected directly with `1`–`4`.
 - Selection keys and UI selection retain Steam-ID identity while order changes.
-- Zoom is cursor-centred, deep enough for close work, and works in every shot.
-- Pan, orbit, precision/fast modifiers, reset, and smoothing remain available.
+- Zoom is cursor-centred in map shots, adjusts distance in Follow, is deep
+  enough for close work, and works in every shot.
+- Every Follow style supports orbit/pitch, lateral offset, lead/lag, height,
+  precision/fast modifiers, and reset without opening another interface.
+- Trackside follows with bounded subject and camera damping and never attempts
+  to rubber-band across a whole-track orthographic distance.
 - Camera state and Zeepkist's spectator controller state are restored on exit,
   scene unload, pause transitions, and plugin shutdown.
 
@@ -84,6 +92,11 @@ Success criteria:
 - Pausing hides program and operator graphics by default. Returning to normal
   racing does not leave the overlay enabled unless the user explicitly presses
   `F9`.
+- Direct exit and Pause Menu → Back to Race preserve Zeepkist's `UIManager`
+  lifecycle, restore the full vanilla race HUD, and leave exactly one playable
+  local kart after repeated entry/exit cycles.
+- Solid-racer presentation never force-enables the local network ghost or
+  overrides Zeepkist's authority over ghost-root visibility.
 - A joining/leaving racer, missing renderer, unsupported visibility shader, or
   unavailable spectator camera degrades locally without breaking the session.
 - No host command, chat command, gameplay packet, or retry loop is introduced.
@@ -100,7 +113,8 @@ Success criteria:
   shipped behavior and controls.
 - Manual acceptance covers activation/exit, all shot families and follow
   styles, clean feed, roster scrolling, repeat attempts, pause/return, host and
-  non-host use, join/leave, and exact local-state restoration.
+  non-host use, join/leave, exact local-state restoration, and the absence of
+  host-only retry/chat spam for a non-host observer.
 
 ## Explicit non-goals for this release
 

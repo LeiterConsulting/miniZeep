@@ -519,7 +519,7 @@ namespace ZeepCast.UI
                 _controlReference,
                 new Vector2(0.5f, 0.5f),
                 new Vector2(0.5f, 0.5f),
-                new Vector2(560f, 510f),
+                new Vector2(580f, 590f),
                 Vector2.zero);
 
             var accent = UiFactory.CreatePanel(
@@ -564,13 +564,17 @@ namespace ZeepCast.UI
                 "4     Trackside follow\n" +
                 "[ ]   Previous / next racer\n" +
                 "M     Racer labels\n\n" +
-                "CAMERA\n" +
-                "Wheel   Zoom\n" +
-                "WASD / middle mouse   Pan\n" +
-                "Right mouse   Orbit isometric view\n" +
-                "R     Reset framing\n" +
+                "CAMERA — ALL SHOTS\n" +
+                "Wheel   Zoom / distance\n" +
+                "Right mouse   Rotate / orbit\n" +
+                "Middle mouse   Free pan\n" +
+                "R     Reset framing and modifiers\n\n" +
+                "FOLLOW MODIFIERS\n" +
+                "A / D   Camera side bias\n" +
+                "W / S   Target lead / lag\n" +
+                "Q / E   Camera height\n" +
                 "Shift precision   •   Ctrl fast",
-                14,
+                13,
                 FontStyle.Normal,
                 TextAnchor.UpperLeft,
                 new Color(0.88f, 0.91f, 0.97f, 1f));

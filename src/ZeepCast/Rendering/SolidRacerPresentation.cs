@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using ZeepCast.Core;
+using ZeepkistClient;
 
 namespace ZeepCast.Rendering
 {
@@ -57,9 +58,14 @@ namespace ZeepCast.Rendering
             }
 
             var present = new HashSet<ulong>();
+            var localSteamId = ZeepkistNetwork.LocalPlayer != null
+                ? ZeepkistNetwork.LocalPlayer.SteamID
+                : 0;
             foreach (var racer in racers)
             {
-                if (racer == null || racer.Ghost == null)
+                if (racer == null ||
+                    racer.Ghost == null ||
+                    (localSteamId != 0 && racer.SteamId == localSteamId))
                 {
                     continue;
                 }
@@ -123,11 +129,10 @@ namespace ZeepCast.Rendering
 
             if (fader == null)
             {
-                // A defensive fallback for a model prefab without FadeGhostModel.
-                if (!ghost.isDead && !ghost.isPhotoMode && ghost.ghostModel != null)
-                {
-                    ghost.ghostModel.gameObject.SetActive(true);
-                }
+                // Zeepkist's own per-ghost visibility loop observes the temporary
+                // draw settings. Never force a model object active directly: the
+                // local network ghost does not run that repair loop and can
+                // otherwise remain as a duplicate kart after leaving photo mode.
                 return;
             }
 
@@ -144,11 +149,6 @@ namespace ZeepCast.Rendering
 
             CaptureRenderers(state);
             fader.enabled = false;
-
-            if (!ghost.isDead && !ghost.isPhotoMode && ghost.ghostModel != null)
-            {
-                ghost.ghostModel.gameObject.SetActive(true);
-            }
 
             var count = Mathf.Min(fader.modelRenderers.Count, fader.modelMaterials.Count);
             for (var i = 0; i < count; i++)

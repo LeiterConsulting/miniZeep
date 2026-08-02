@@ -15,8 +15,9 @@ miniZeep should be:
 1. `ZeepCastPlugin` registers configuration and creates one persistent
    `BroadcastDirector`.
 2. The director waits for explicit activation in `GameScene`.
-3. It uses Zeepkist's allowed local photo-mode transition and captures camera,
-   cursor, spectator UI, renderer, material, and graphics-setting state.
+3. It captures the pre-photo-mode cursor and race-UI state, then uses
+   Zeepkist's allowed local photo-mode transition and captures camera,
+   spectator presentation, renderer, material, and graphics-setting state.
 4. It calculates level bounds from loaded block metadata.
 5. It reads the existing network player list into `RacerSnapshot` objects.
 6. `BroadcastHud` renders program graphics and the independent operator console.
@@ -36,7 +37,8 @@ miniZeep should be:
 
 - Activation and cleanup
 - Overview and live-field isometric modes plus motion-aware isometric, chase,
-  lead, and repositioning trackside follow shots
+  lead, and damped-dolly trackside follow shots
+- Shared Follow distance, orbit/pitch, side, lead/lag, and height modifiers
 - Camera input and framing
 - Level bounds
 - Racer discovery and ordering
@@ -50,7 +52,11 @@ active." This permits F9 to show telemetry over normal gameplay while camera
 input and world markers remain disabled and other HUD mods retain race chrome.
 Camera ownership is acquired only for the program view and released before
 Zeepkist processes pause-menu transitions. F6 exits native photo mode only when
-ZeepCast entered it.
+ZeepCast entered it. ZeepCast never manually closes `SpectatorCameraUI`; doing
+so would desynchronize `BaseUI.IsOpen` from `UIManager`'s active stack. It hides
+only the stock visual holder and lets the native photo-mode exit unregister the
+spectator surface and reopen `OnlineGameplayUI`. A bounded post-restart check
+reopens race children only when the lobby is in its normal racing state.
 
 ### RacerSnapshot
 
@@ -61,7 +67,9 @@ network player and remote racer representation but contains no network logic.
 
 `Rendering/SolidRacerPresentation.cs` reverses Zeepkist's translucent remote
 ghost presentation for live racers. It caches every renderer, material, fader,
-and relevant setting before changing it.
+and relevant setting before changing it. It excludes the local Steam ID and
+never force-enables a ghost root; the game remains authoritative for object
+visibility and local-kart spawning.
 
 Remote multiplayer racers are represented by
 `NetworkedZeepkistGhost.ghostModel`; there is not a second independent "live

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.0 - First-class tracking and presentation
+
+- Replaced Trackside's threshold relocation with a two-stage damped dolly for
+  its subject and camera, including a bounded near-subject handoff from distant
+  orthographic views
+- Added shared Follow framing controls: mouse-wheel distance, right-drag
+  orbit/pitch, `A`/`D` side bias, `W`/`S` lead/lag, `Q`/`E` height, and `R`
+  reset, with `Shift` precision and `Ctrl` fast modifiers
+- Preserved Zeepkist's native spectator UI stack instead of closing its
+  controller behind `UIManager`
+- Captured cursor/input ownership before entering native photo mode and added a
+  bounded post-restart race-UI reconciliation
+- Excluded the local network ghost from solid-racer presentation and stopped
+  force-enabling ghost roots, preventing a duplicate/broken start-line actor
+- Expanded the `H` control reference for the new framing controls
+- Passed live non-host multiplayer acceptance for all four Follow styles,
+  zoom, direct exit, repeated entry, pause-menu Back to Race, optional `F9`
+  race graphics, full vanilla HUD restoration, and no host-command chat spam
+
 ## 0.2.1 - Camera handoff and operator controls
 
 - Fixed race chrome remaining suppressed after returning from ZeepCast

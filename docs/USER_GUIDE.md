@@ -39,24 +39,28 @@ cannot activate instead of trying to bypass the lobby setting.
 | `1` | Follow the selected racer with the isometric camera |
 | `2` | Follow from a motion-aware chase camera |
 | `3` | Place a motion-aware camera ahead of the racer |
-| `4` | Use a trackside camera that intelligently relocates as the racer passes |
+| `4` | Use a damped trackside dolly that travels with the racer |
 | `H` | Show or hide the complete operator control reference |
 | `[` / `]` | Select the previous or next racer |
 | Click racer tile or marker | Select and follow that racer |
-| `W A S D` | Pan relative to camera heading |
+| `W A S D` | Pan Overview/Field; adjust lead/lag and side bias in Follow |
+| `Q E` | Lower or raise the Follow camera |
 | Middle mouse drag | Drag the map |
 | Right mouse drag | Orbit and change pitch |
 | Mouse wheel | Zoom toward the cursor |
 | `Shift` | Make the active camera input more precise |
 | `Ctrl` | Make the active camera input faster |
-| `R` | Reset zoom, orbit, and pan |
+| `R` | Reset zoom, orbit, pan, and Follow modifiers |
 
 Overview fits the course. Field follows the bounds of racers still competing.
 Follow tracks the selected racer. The numbered keys select a follow style
 directly and switch to Follow without adding another interface panel. Chase,
-Lead, and Trackside infer the racer's direction from recent motion. When no
-racer is available, the camera skips Follow instead of showing a misleading
-empty view.
+Lead, and Trackside infer the racer's direction from recent motion. Trackside
+uses a damped subject-and-camera dolly rather than snapping between placements.
+In every Follow style, the wheel adjusts distance, right-drag changes orbit and
+pitch, `A`/`D` adds side bias, `W`/`S` changes lead or lag, and `Q`/`E` changes
+height. When no racer is available, the camera skips Follow instead of showing
+a misleading empty view.
 
 The mouse wheel scrolls the roster instead of zooming when the pointer is over
 the racer list.
@@ -77,6 +81,11 @@ the racer list.
 
 ZeepCast suppresses Zeepkist's stock flying-camera labels only while it owns
 the isometric program view and restores their prior state on release.
+
+ZeepCast leaves Zeepkist's spectator UI controller registered while hiding only
+its visual holder. Direct `F6` exit and Pause Menu → Back to Race therefore
+return through the native UI lifecycle, restore the race HUD, and leave exactly
+one playable local kart.
 
 A previous leaderboard result does not permanently mark a racer as finished.
 Finish state resets when that racer begins another attempt.

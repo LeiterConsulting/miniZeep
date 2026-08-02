@@ -12,7 +12,7 @@ namespace ZeepCast
     {
         public const string PluginGuid = "com.chris.zeepcast";
         public const string PluginName = "ZeepCast";
-        public const string PluginVersion = "0.2.1";
+        public const string PluginVersion = "0.3.0";
 
         internal static ManualLogSource Log { get; private set; } = null!;
 

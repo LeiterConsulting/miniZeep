@@ -5,7 +5,7 @@ miniZeep is a community-first broadcast and spectator toolkit for
 plugin is named **ZeepCast**: an observer-side isometric race director for cups,
 contests, community events, and streams.
 
-The 0.2 release line is a bounded, spectator-first broadcast tool rather than an
+The 0.3 release line is a bounded, spectator-first broadcast tool rather than an
 open-ended prototype. The code remains intentionally extensible: use the
 camera and telemetry core, change the interface, or build another production
 workflow on top of it.
@@ -17,7 +17,9 @@ workflow on top of it.
 ## What works today
 
 - Overview and live-field isometric shots plus isometric, chase, lead, and
-  intelligent repositioning trackside racer-follow shots
+  damped-dolly trackside racer-follow shots
+- Shared follow framing: zoom, orbit/pitch, lateral offset, lead/lag, height,
+  precision/fast adjustment, and one-key reset
 - Deep cursor-focused zoom, orbit, keyboard pan, and mouse-drag pan
 - Scrollable classification, clickable racer tiles, and optional world labels
 - Live speed, attempt/result time, finish state, race status, field totals, and
@@ -77,14 +79,15 @@ reference the copies from your own local installation. Read
 | `H` | Show or hide the complete operator control reference |
 | `M` | Hide or show on-track racer labels |
 | `[` / `]` | Previous or next racer |
-| `W A S D` | Pan relative to the camera |
+| `W A S D` | Pan Overview/Field; lead/lag and lateral offset in Follow |
+| `Q E` | Lower or raise the Follow camera |
 | Middle mouse drag | Pan the map directly |
 | Right mouse drag | Orbit and change pitch |
 | Mouse wheel over map | Cursor-focused zoom |
 | Mouse wheel over roster | Scroll the racer list |
 | `Shift` + camera input | Fine adjustment |
 | `Ctrl` + camera input | Fast adjustment |
-| `R` | Reset framing, orbit, and zoom |
+| `R` | Reset framing, orbit, zoom, and Follow modifiers |
 
 ## Project guides
 

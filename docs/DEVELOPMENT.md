@@ -81,15 +81,17 @@ At minimum, test:
 
 1. Activation and exit in a multiplayer level
 2. Overview, live-field, and follow views
-3. Deep zoom, cursor focus, pan, orbit, reset, and roster scrolling
+3. Deep zoom, cursor focus, pan, orbit, reset, roster scrolling, and Follow
+   side/lead/height modifiers
 4. Racer selection by tile, marker, and keyboard
 5. Multiple attempts after a racer finishes
-6. Pause menu, return to visualization, and Return to Racing
+6. Direct F6 exit, repeated entry, pause menu, return to visualization, and
+   Back to Race
 7. Clean feed, racer-label toggle, F9 automatic behavior, and manual override
 8. Host and non-host observer sessions
 9. Player join/leave while the director is open
-10. Restoration of cursor, camera controller, stock spectator graphics,
-    materials, and settings on exit
+10. Restoration of cursor, vanilla HUD, one playable local kart, camera
+    controller, stock spectator graphics, materials, and settings on exit
 
 ## Working with game behavior
 
