@@ -19,9 +19,10 @@ miniZeep should be:
    cursor, spectator UI, renderer, material, and graphics-setting state.
 4. It calculates level bounds from loaded block metadata.
 5. It reads the existing network player list into `RacerSnapshot` objects.
-6. `BroadcastHud` renders the roster, markers, header, and selected-racer card.
+6. `BroadcastHud` renders program graphics and the independent operator console.
 7. The director moves only the local spectator camera.
-8. On exit or scene unload, captured state is restored.
+8. On photo-mode exit, pause, explicit exit, or scene unload, each captured
+   presentation and camera state is restored at its ownership boundary.
 
 ## Components
 
@@ -34,13 +35,14 @@ miniZeep should be:
 `Core/BroadcastDirector.cs` owns:
 
 - Activation and cleanup
-- Overview/follow camera modes
+- Overview, live-field, and followed-racer camera modes
 - Camera input and framing
 - Level bounds
 - Racer discovery and ordering
 - Current-attempt finish-state tracking
 - Pause/photo-mode transitions
 - Camera culling-distance adjustments
+- Native spectator-graphics ownership while the program view is active
 
 The director deliberately separates "director active" from "visualization
 active." This permits F9 to show telemetry over normal gameplay while camera
@@ -61,10 +63,27 @@ Remote multiplayer racers are represented by
 `NetworkedZeepkistGhost.ghostModel`; there is not a second independent "live
 racer" object to discover.
 
+### SelectedRacerVisibility
+
+`Rendering/SelectedRacerVisibility.cs` adds a camera-local command buffer that
+draws only the selected racer fragments hidden by geometry. It never changes
+track materials and removes the pass immediately when selection, scene, or
+camera ownership changes.
+
+### NativeSpectatorGraphics
+
+`Rendering/NativeSpectatorGraphics.cs` temporarily suppresses the stock flying
+camera presentation surface so it cannot leak operator instructions into the
+program feed. It records and restores the original active state and does not
+depend on ZeepSDK internals.
+
 ### BroadcastHud and UiFactory
 
 `UI/BroadcastHud.cs` builds a resolution-independent uGUI interface in code.
 `UI/UiFactory.cs` contains the small construction helpers and shared colors.
+The header, classification, selected-racer lower third, and markers are program
+graphics. Race Control and the help strip are operator surfaces and can be
+hidden independently.
 
 ## Multiplayer and authority
 

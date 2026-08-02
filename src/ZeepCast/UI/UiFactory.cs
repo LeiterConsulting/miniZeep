@@ -9,11 +9,27 @@ namespace ZeepCast.UI
         private static Font? _font;
         public static Font Font => _font ??= Resources.GetBuiltinResource<Font>("Arial.ttf");
 
-        public static readonly Color Ink = new Color(0.96f, 0.98f, 1f, 1f);
-        public static readonly Color MutedInk = new Color(0.68f, 0.73f, 0.82f, 1f);
-        public static readonly Color Panel = new Color(0.025f, 0.035f, 0.065f, 0.92f);
-        public static readonly Color PanelLight = new Color(0.075f, 0.095f, 0.145f, 0.94f);
-        public static readonly Color Accent = new Color(0.2f, 0.82f, 1f, 1f);
+        // Semantic broadcast palette. Surfaces remain translucent enough to
+        // preserve the miniature-track view, while text never sits directly on
+        // bright gameplay.
+        public static readonly Color Background = new Color(0.025f, 0.032f, 0.05f, 0.96f);
+        public static readonly Color Surface = new Color(0.045f, 0.058f, 0.09f, 0.93f);
+        public static readonly Color SurfaceRaised = new Color(0.075f, 0.095f, 0.14f, 0.96f);
+        public static readonly Color Border = new Color(0.18f, 0.22f, 0.31f, 0.92f);
+        public static readonly Color TextPrimary = new Color(0.965f, 0.975f, 1f, 1f);
+        public static readonly Color TextMuted = new Color(0.7f, 0.75f, 0.84f, 1f);
+        public static readonly Color Accent = new Color(0.22f, 0.86f, 1f, 1f);
+        public static readonly Color Positive = new Color(0.42f, 0.94f, 0.58f, 1f);
+        public static readonly Color Warning = new Color(1f, 0.78f, 0.28f, 1f);
+        public static readonly Color Danger = new Color(1f, 0.34f, 0.34f, 1f);
+        public static readonly Color Selected = new Color(0.09f, 0.19f, 0.25f, 0.98f);
+
+        // Compatibility aliases keep construction code readable while older
+        // community forks merge the spectator HUD incrementally.
+        public static readonly Color Ink = TextPrimary;
+        public static readonly Color MutedInk = TextMuted;
+        public static readonly Color Panel = Background;
+        public static readonly Color PanelLight = SurfaceRaised;
 
         public static RectTransform CreateCanvas(string name, int sortingOrder)
         {

@@ -16,7 +16,6 @@ features they care about.
 
 ## Broadcast essentials
 
-- Selected-racer silhouette visible through nearby geometry
 - Localized transparency or dither cutaway when a followed racer is occluded
 - Camera presets saved per track
 - Sector cameras placed or inferred along a course
@@ -40,7 +39,6 @@ rejected commands.
 
 ## Production output
 
-- Separate clean program feed and director-control interface
 - Second-window or second-display output
 - OBS/browser-source-friendly telemetry bridge
 - Safe overlay API for community themes

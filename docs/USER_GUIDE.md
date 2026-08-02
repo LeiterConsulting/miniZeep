@@ -22,8 +22,8 @@ The first launch creates a BepInEx configuration file for the plugin.
 
 While a level is running:
 
-- Press `F8` to enter ZeepCast.
-- Press `F8` again to release the director camera.
+- Press `F6` to enter ZeepCast.
+- Press `F6` again to release the director camera.
 - Press `Escape` to open Zeepkist's menu. The broadcast HUD hides by default.
 - Choose Return to Racing to leave the visualization and keep the HUD hidden.
 - Press `F9` if you intentionally want the broadcast HUD over normal gameplay.
@@ -35,7 +35,7 @@ cannot activate instead of trying to bypass the lobby setting.
 
 | Input | Action |
 | --- | --- |
-| `Tab` | Switch between whole-track overview and racer follow |
+| `V` | Cycle Overview, Field, and Follow shots |
 | `[` / `]` | Select the previous or next racer |
 | Click racer tile or marker | Select and follow that racer |
 | `W A S D` | Pan relative to camera heading |
@@ -45,6 +45,10 @@ cannot activate instead of trying to bypass the lobby setting.
 | `Shift` | Make the active camera input more precise |
 | `Ctrl` | Make the active camera input faster |
 | `R` | Reset zoom, orbit, and pan |
+
+Overview fits the course. Field follows the bounds of racers still competing.
+Follow tracks the selected racer; when no racer is available, the camera skips
+that shot instead of showing a misleading empty follow view.
 
 The mouse wheel scrolls the roster instead of zooming when the pointer is over
 the racer list.
@@ -56,7 +60,13 @@ the racer list.
 - Clicking a racer changes to follow mode.
 - On-track labels identify racers in the overview.
 - The bottom card contains expanded information for the selected racer.
+- Backquote (`` ` ``) hides Race Control and the help strip while retaining
+  viewer-facing program graphics.
+- `M` controls racer labels independently.
 - `F9` hides or restores the entire broadcast interface.
+
+ZeepCast suppresses Zeepkist's stock flying-camera labels only while it owns
+the isometric program view and restores their prior state on release.
 
 A previous leaderboard result does not permanently mark a racer as finished.
 Finish state resets when that racer begins another attempt.
@@ -70,9 +80,12 @@ Open the generated BepInEx configuration file for ZeepCast to change:
 - Starting pitch and yaw
 - Follow view size
 - Overview padding
+- Live-field padding
 - Camera smoothing
 - Automatic photo-mode entry
 - Solid live-racer presentation
+- Selected-racer occlusion highlighting
+- Whether Race Control is visible on activation
 
 ## Troubleshooting
 

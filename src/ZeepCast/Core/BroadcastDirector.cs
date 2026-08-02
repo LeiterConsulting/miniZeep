@@ -13,6 +13,7 @@ namespace ZeepCast.Core
     internal enum BroadcastCameraMode
     {
         Overview,
+        Field,
         Follow
     }
 
@@ -36,6 +37,8 @@ namespace ZeepCast.Core
         private BroadcastSettings _settings = null!;
         private BroadcastHud? _hud;
         private SolidRacerPresentation? _solidRacerPresentation;
+        private SelectedRacerVisibility? _selectedRacerVisibility;
+        private readonly NativeSpectatorGraphics _nativeSpectatorGraphics = new();
         private readonly List<RacerSnapshot> _racers = new();
         private readonly Dictionary<ulong, RacerAttemptState> _attemptStates = new();
 
@@ -48,6 +51,8 @@ namespace ZeepCast.Core
         private bool _initialized;
         private bool _active;
         private bool _uiVisible = true;
+        private bool _directorConsoleVisible = true;
+        private bool _markersVisible = true;
         private bool _flyingCameraWasEnabled;
         private bool _spectatorUiWasOpen;
         private bool _enteredPhotoMode;
@@ -69,18 +74,24 @@ namespace ZeepCast.Core
         private Bounds _levelBounds;
         private bool _hasLevelBounds;
         private Vector3 _overviewPivot;
+        private Vector3 _fieldPivot;
         private Vector3 _currentPivot;
         private Vector3 _panOffset;
         private float _overviewSize = 80f;
+        private float _fieldSize = 45f;
         private float _currentSize = 45f;
+        private float _zoomScale = 1f;
         private float _yaw;
         private float _pitch;
         private float _nextRosterRefresh;
         private ulong _selectedSteamId;
         private string _levelTitle = "Unknown level";
+        private BroadcastFieldSummary _fieldSummary;
 
         public bool IsActive => _active;
         public bool IsUiVisible => _uiVisible;
+        public bool IsDirectorConsoleVisible => _directorConsoleVisible;
+        public bool AreMarkersVisible => _markersVisible;
         public bool IsVisualizationActive =>
             _active &&
             _master != null &&
@@ -95,6 +106,7 @@ namespace ZeepCast.Core
         public Camera? BroadcastCamera => _camera;
         public string EventTitle => _settings.EventTitle.Value;
         public string LevelTitle => _levelTitle;
+        public BroadcastFieldSummary FieldSummary => _fieldSummary;
 
         public string LobbyClock
         {
@@ -121,6 +133,7 @@ namespace ZeepCast.Core
             _initialized = true;
             _settings = settings;
             _solidRacerPresentation = new SolidRacerPresentation(settings.ForceSolidRacers.Value);
+            _selectedRacerVisibility = new SelectedRacerVisibility(settings.HighlightSelectedRacer.Value);
             _yaw = settings.Yaw.Value;
             _pitch = settings.Pitch.Value;
             _currentSize = Mathf.Max(MinimumViewSize, settings.FollowSize.Value);
@@ -190,10 +203,28 @@ namespace ZeepCast.Core
 
             UpdateVisualizationState();
 
+            // Photo mode can reopen its own spectator UI one frame after the
+            // camera transition. ZeepCast keeps only that presentation surface
+            // closed; it does not alter lobby or network state.
+            if (IsVisualizationActive && _spectatorUi != null && _spectatorUi.IsOpen)
+            {
+                _spectatorUi.Close(announce: false);
+            }
+
             if (_settings.ToggleInterface.Value.IsDown())
             {
                 _hudAutoHiddenOutsideVisualization = false;
                 SetInterfaceVisible(!_uiVisible);
+            }
+
+            if (_settings.ToggleDirectorConsole.Value.IsDown())
+            {
+                SetDirectorConsoleVisible(!_directorConsoleVisible);
+            }
+
+            if (_settings.ToggleMarkers.Value.IsDown())
+            {
+                SetMarkersVisible(!_markersVisible);
             }
 
             if (Time.unscaledTime >= _nextRosterRefresh)
@@ -227,12 +258,28 @@ namespace ZeepCast.Core
 
         private void LateUpdate()
         {
-            if (!_active || !IsVisualizationActive)
+            if (!_active)
             {
                 return;
             }
 
+            if (!IsVisualizationActive)
+            {
+                return;
+            }
+
+            _nativeSpectatorGraphics.Apply(_spectatorUi);
+
             _solidRacerPresentation?.Apply(_racers);
+
+            if (TryGetSelected(out var highlighted))
+            {
+                _selectedRacerVisibility?.Apply(_camera!, highlighted);
+            }
+            else
+            {
+                _selectedRacerVisibility?.Clear();
+            }
 
             if (_camera == null)
             {
@@ -243,16 +290,35 @@ namespace ZeepCast.Core
             Vector3 desiredPivot;
             float desiredSize;
 
+            if (_hasLevelBounds)
+            {
+                _overviewSize = CalculateViewSize(
+                    _levelBounds,
+                    rotation,
+                    Mathf.Max(1f, _settings.OverviewPadding.Value),
+                    20f);
+            }
+
+            UpdateFieldFraming(rotation);
+
             if (CameraMode == BroadcastCameraMode.Follow && TryGetSelected(out var selected))
             {
                 desiredPivot = selected.Transform.position + _panOffset;
-                desiredSize = Mathf.Max(MinimumViewSize, _currentSize);
+                desiredSize = GetBaseViewSize() * _zoomScale;
+            }
+            else if (CameraMode == BroadcastCameraMode.Field)
+            {
+                desiredPivot = _fieldPivot + _panOffset;
+                desiredSize = GetBaseViewSize() * _zoomScale;
             }
             else
             {
                 desiredPivot = _overviewPivot + _panOffset;
-                desiredSize = Mathf.Max(MinimumViewSize, _currentSize);
+                desiredSize = GetBaseViewSize() * _zoomScale;
             }
+
+            desiredSize = Mathf.Max(MinimumViewSize, desiredSize);
+            _currentSize = desiredSize;
 
             var smoothing = Mathf.Max(0.1f, _settings.PositionSmoothing.Value);
             var blend = 1f - Mathf.Exp(-smoothing * Time.unscaledDeltaTime);
@@ -283,7 +349,8 @@ namespace ZeepCast.Core
             _selectedSteamId = steamId;
             _panOffset = Vector3.zero;
             CameraMode = BroadcastCameraMode.Follow;
-            _currentSize = Mathf.Max(MinimumViewSize, _settings.FollowSize.Value);
+            _zoomScale = 1f;
+            _currentSize = GetBaseViewSize();
 
             if (_flyingCamera != null)
             {
@@ -373,6 +440,9 @@ namespace ZeepCast.Core
             _yaw = _settings.Yaw.Value;
             _panOffset = Vector3.zero;
             CameraMode = BroadcastCameraMode.Overview;
+            _zoomScale = 1f;
+            _directorConsoleVisible = _settings.StartWithDirectorConsole.Value;
+            _markersVisible = true;
 
             ReadLevelTitle();
             CalculateLevelBounds();
@@ -384,11 +454,14 @@ namespace ZeepCast.Core
             _visualizationWasActive = true;
             _hudAutoHiddenOutsideVisualization = false;
             _solidRacerPresentation?.Begin();
+            _selectedRacerVisibility?.Begin(_camera);
             SetInterfaceVisible(true);
+            SetDirectorConsoleVisible(_directorConsoleVisible);
+            SetMarkersVisible(_markersVisible);
 
             ZeepCastPlugin.Log.LogInfo(
                 $"Director activated with {_racers.Count} racers. Bounds: center={_levelBounds.center}, size={_levelBounds.size}");
-            Notify("ZeepCast director active — F9 hides the interface, Tab changes camera mode.");
+            Notify("ZeepCast spectator active — ` clean feed, F9 graphics, V changes shot.");
         }
 
         private void Deactivate(bool restoreCamera)
@@ -401,18 +474,12 @@ namespace ZeepCast.Core
             _active = false;
             _hud?.SetVisible(false);
             _solidRacerPresentation?.Restore();
+            _selectedRacerVisibility?.Restore();
+            _nativeSpectatorGraphics.Restore();
 
-            if (restoreCamera && _camera != null)
+            if (restoreCamera)
             {
-                _camera.orthographic = _cameraWasOrthographic;
-                _camera.orthographicSize = _cameraOrthographicSize;
-                _camera.fieldOfView = _cameraFieldOfView;
-                _camera.nearClipPlane = _cameraNearClip;
-                _camera.farClipPlane = _cameraFarClip;
-                _camera.layerCullSpherical = _cameraLayerCullSpherical;
-                _camera.layerCullDistances = _cameraLayerCullDistances;
-                _camera.transform.position = _cameraPosition;
-                _camera.transform.rotation = _cameraRotation;
+                RestoreCameraState();
             }
 
             if (_flyingCamera != null)
@@ -455,6 +522,13 @@ namespace ZeepCast.Core
             if (!visualizationActive)
             {
                 _solidRacerPresentation?.Restore();
+                _selectedRacerVisibility?.Restore();
+                _nativeSpectatorGraphics.Restore();
+                RestoreCameraState();
+                if (_flyingCamera != null)
+                {
+                    _flyingCamera.enabled = _flyingCameraWasEnabled;
+                }
                 if (_uiVisible)
                 {
                     _hudAutoHiddenOutsideVisualization = true;
@@ -464,7 +538,17 @@ namespace ZeepCast.Core
                 return;
             }
 
+            CaptureCameraState();
+            if (_flyingCamera != null)
+            {
+                _flyingCameraWasEnabled = _flyingCamera.enabled;
+                _flyingCamera.enabled = false;
+            }
             _solidRacerPresentation?.Begin();
+            if (_camera != null)
+            {
+                _selectedRacerVisibility?.Begin(_camera);
+            }
             if (_hudAutoHiddenOutsideVisualization)
             {
                 _hudAutoHiddenOutsideVisualization = false;
@@ -477,10 +561,10 @@ namespace ZeepCast.Core
             _uiVisible = visible;
             _hud?.SetVisible(visible);
 
-            if (visible)
+            if (visible && IsVisualizationActive)
             {
                 Cursor.lockState = CursorLockMode.None;
-                Cursor.visible = true;
+                Cursor.visible = _directorConsoleVisible;
             }
             else if (!IsVisualizationActive)
             {
@@ -491,6 +575,24 @@ namespace ZeepCast.Core
             {
                 Cursor.visible = false;
             }
+        }
+
+        private void SetDirectorConsoleVisible(bool visible)
+        {
+            _directorConsoleVisible = visible;
+            _hud?.SetDirectorConsoleVisible(visible);
+
+            if (IsVisualizationActive && _uiVisible)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = visible;
+            }
+        }
+
+        private void SetMarkersVisible(bool visible)
+        {
+            _markersVisible = visible;
+            _hud?.SetMarkersVisible(visible);
         }
 
         private void CaptureCameraState()
@@ -509,6 +611,24 @@ namespace ZeepCast.Core
             _cameraLayerCullDistances = (float[])_camera.layerCullDistances.Clone();
             _cameraPosition = _camera.transform.position;
             _cameraRotation = _camera.transform.rotation;
+        }
+
+        private void RestoreCameraState()
+        {
+            if (_camera == null)
+            {
+                return;
+            }
+
+            _camera.orthographic = _cameraWasOrthographic;
+            _camera.orthographicSize = _cameraOrthographicSize;
+            _camera.fieldOfView = _cameraFieldOfView;
+            _camera.nearClipPlane = _cameraNearClip;
+            _camera.farClipPlane = _cameraFarClip;
+            _camera.layerCullSpherical = _cameraLayerCullSpherical;
+            _camera.layerCullDistances = _cameraLayerCullDistances;
+            _camera.transform.position = _cameraPosition;
+            _camera.transform.rotation = _cameraRotation;
         }
 
         private void ApplyRacerLayerCullDistances(float requiredDrawDistance)
@@ -596,10 +716,14 @@ namespace ZeepCast.Core
         private void RefreshRacers()
         {
             var previousSelection = _selectedSteamId;
+            var previousSelectionIndex = _racers.FindIndex(item => item.SteamId == previousSelection);
             _racers.Clear();
 
             if (!ZeepkistNetwork.IsConnected)
             {
+                _selectedSteamId = 0;
+                _fieldSummary = default;
+                _selectedRacerVisibility?.Clear();
                 return;
             }
 
@@ -613,27 +737,29 @@ namespace ZeepCast.Core
 
                 var currentResult = player.CurrentResult;
                 var attempt = UpdateAttemptState(player, ghost);
+                var statusKind = ReadStatus(ghost, attempt.Finished, out var status);
                 var name = player.GetUserNameNoTag();
                 if (string.IsNullOrWhiteSpace(name))
                 {
                     name = player.GetTaggedUsername();
                 }
 
-                _racers.Add(new RacerSnapshot
-                {
-                    SteamId = player.SteamID,
-                    Name = string.IsNullOrWhiteSpace(name) ? $"Racer {player.UID}" : name,
-                    Color = ColorForPlayer(player.SteamID),
-                    Player = player,
-                    Ghost = ghost,
-                    Transform = ghost.ghostModel.transform,
-                    Checkpoints = attempt.Finished ? currentResult?.Checkpoints ?? 0 : 0,
-                    Runtime = Mathf.Max(0f, ghost.displayRuntime),
-                    Speed = Math.Abs((int)ghost.displayVelocity),
-                    Finished = attempt.Finished,
-                    FinishTime = attempt.Finished ? attempt.FinishTime : 0f,
-                    Status = BuildStatus(ghost, attempt.Finished)
-                });
+                _racers.Add(new RacerSnapshot(
+                    player.SteamID,
+                    0,
+                    string.IsNullOrWhiteSpace(name) ? $"Racer {player.UID}" : name,
+                    ColorForPlayer(player.SteamID),
+                    player,
+                    ghost,
+                    ghost.ghostModel.transform,
+                    attempt.Finished ? currentResult?.Checkpoints ?? 0 : 0,
+                    Mathf.Max(0f, ghost.displayRuntime),
+                    Math.Abs((int)ghost.displayVelocity),
+                    player.ChampionshipPoints.x,
+                    attempt.Finished,
+                    attempt.Finished ? attempt.FinishTime : 0f,
+                    statusKind,
+                    status));
             }
 
             var activeIds = new HashSet<ulong>(_racers.Select(racer => racer.SteamId));
@@ -645,7 +771,7 @@ namespace ZeepCast.Core
             _racers.Sort(CompareRacers);
             for (var i = 0; i < _racers.Count; i++)
             {
-                _racers[i].Position = i + 1;
+                _racers[i] = _racers[i].WithPosition(i + 1);
             }
 
             if (_racers.Any(item => item.SteamId == previousSelection))
@@ -654,13 +780,17 @@ namespace ZeepCast.Core
             }
             else if (_racers.Count > 0)
             {
-                _selectedSteamId = _racers[0].SteamId;
+                var replacementIndex = previousSelectionIndex < 0
+                    ? 0
+                    : Mathf.Clamp(previousSelectionIndex, 0, _racers.Count - 1);
+                _selectedSteamId = _racers[replacementIndex].SteamId;
             }
             else
             {
                 _selectedSteamId = 0;
             }
 
+            _fieldSummary = BuildFieldSummary(_racers);
             SyncFlyingCameraTarget();
         }
 
@@ -781,21 +911,27 @@ namespace ZeepCast.Core
             return left.Runtime.CompareTo(right.Runtime);
         }
 
-        private static string BuildStatus(NetworkedZeepkistGhost ghost, bool finished)
+        private static RacerStatusKind ReadStatus(
+            NetworkedZeepkistGhost ghost,
+            bool finished,
+            out string label)
         {
             if (finished)
             {
-                return "FINISHED";
+                label = "FINISHED";
+                return RacerStatusKind.Finished;
             }
 
             if (ghost.isDead)
             {
-                return "CRASHED";
+                label = "CRASHED";
+                return RacerStatusKind.Crashed;
             }
 
             if (ghost.isPhotoMode)
             {
-                return "SPECTATING";
+                label = "SPECTATING";
+                return RacerStatusKind.Spectating;
             }
 
             var damagedWheels =
@@ -806,40 +942,87 @@ namespace ZeepCast.Core
 
             if (damagedWheels > 0)
             {
-                return $"{damagedWheels} WHEEL{(damagedWheels == 1 ? string.Empty : "S")} LOST";
+                label = $"{damagedWheels} WHEEL{(damagedWheels == 1 ? string.Empty : "S")} LOST";
+                return RacerStatusKind.Damaged;
             }
 
             if (ghost.isBoosting)
             {
-                return "BOOST";
+                label = "BOOST";
+                return RacerStatusKind.Boosting;
             }
 
             if (ghost.isFanning)
             {
-                return "FAN";
+                label = "FAN";
+                return RacerStatusKind.Fanning;
             }
 
             if (ghost.brake)
             {
-                return "BRAKE";
+                label = "BRAKE";
+                return RacerStatusKind.Braking;
             }
 
-            return "RACING";
+            label = "RACING";
+            return RacerStatusKind.Racing;
+        }
+
+        private static BroadcastFieldSummary BuildFieldSummary(IReadOnlyList<RacerSnapshot> racers)
+        {
+            var racing = 0;
+            var finished = 0;
+            var spectating = 0;
+            var incidents = 0;
+
+            foreach (var racer in racers)
+            {
+                switch (racer.StatusKind)
+                {
+                    case RacerStatusKind.Finished:
+                        finished++;
+                        break;
+                    case RacerStatusKind.Spectating:
+                        spectating++;
+                        break;
+                    case RacerStatusKind.Crashed:
+                    case RacerStatusKind.Damaged:
+                        incidents++;
+                        break;
+                    default:
+                        racing++;
+                        break;
+                }
+            }
+
+            return new BroadcastFieldSummary(
+                racers.Count,
+                racing,
+                finished,
+                spectating,
+                incidents);
         }
 
         private void ToggleCameraMode()
         {
             _panOffset = Vector3.zero;
-            if (CameraMode == BroadcastCameraMode.Overview)
+            _zoomScale = 1f;
+            switch (CameraMode)
             {
-                CameraMode = BroadcastCameraMode.Follow;
-                _currentSize = Mathf.Max(MinimumViewSize, _settings.FollowSize.Value);
+                case BroadcastCameraMode.Overview:
+                    CameraMode = BroadcastCameraMode.Field;
+                    break;
+                case BroadcastCameraMode.Field:
+                    CameraMode = TryGetSelected(out _)
+                        ? BroadcastCameraMode.Follow
+                        : BroadcastCameraMode.Overview;
+                    break;
+                default:
+                    CameraMode = BroadcastCameraMode.Overview;
+                    break;
             }
-            else
-            {
-                CameraMode = BroadcastCameraMode.Overview;
-                _currentSize = _overviewSize;
-            }
+
+            _currentSize = GetBaseViewSize();
         }
 
         private void SelectRelative(int direction)
@@ -952,6 +1135,7 @@ namespace ZeepCast.Core
                 _panOffset += pivotShift;
             }
 
+            _zoomScale = nextSize / Mathf.Max(MinimumViewSize, GetBaseViewSize());
             _currentSize = nextSize;
         }
 
@@ -983,9 +1167,84 @@ namespace ZeepCast.Core
             _panOffset = Vector3.zero;
             _yaw = _settings.Yaw.Value;
             _pitch = Mathf.Clamp(_settings.Pitch.Value, 12f, 88f);
-            _currentSize = CameraMode == BroadcastCameraMode.Overview
-                ? _overviewSize
-                : Mathf.Max(MinimumViewSize, _settings.FollowSize.Value);
+            _zoomScale = 1f;
+            _currentSize = GetBaseViewSize();
+        }
+
+        private float GetBaseViewSize()
+        {
+            switch (CameraMode)
+            {
+                case BroadcastCameraMode.Field:
+                    return Mathf.Max(MinimumViewSize, _fieldSize);
+                case BroadcastCameraMode.Follow:
+                    return Mathf.Max(MinimumViewSize, _settings.FollowSize.Value);
+                default:
+                    return Mathf.Max(MinimumViewSize, _overviewSize);
+            }
+        }
+
+        private void UpdateFieldFraming(Quaternion rotation)
+        {
+            var hasField = false;
+            var bounds = new Bounds();
+
+            foreach (var racer in _racers)
+            {
+                if (racer.Transform == null ||
+                    racer.StatusKind == RacerStatusKind.Spectating ||
+                    racer.StatusKind == RacerStatusKind.Finished ||
+                    racer.StatusKind == RacerStatusKind.Crashed)
+                {
+                    continue;
+                }
+
+                if (!hasField)
+                {
+                    bounds = new Bounds(racer.Transform.position, Vector3.zero);
+                    hasField = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(racer.Transform.position);
+                }
+            }
+
+            if (!hasField)
+            {
+                foreach (var racer in _racers)
+                {
+                    if (racer.Transform == null)
+                    {
+                        continue;
+                    }
+
+                    if (!hasField)
+                    {
+                        bounds = new Bounds(racer.Transform.position, Vector3.zero);
+                        hasField = true;
+                    }
+                    else
+                    {
+                        bounds.Encapsulate(racer.Transform.position);
+                    }
+                }
+            }
+
+            if (!hasField)
+            {
+                _fieldPivot = _overviewPivot;
+                _fieldSize = _overviewSize;
+                return;
+            }
+
+            bounds.Expand(new Vector3(12f, 10f, 12f));
+            _fieldPivot = bounds.center;
+            _fieldSize = CalculateViewSize(
+                bounds,
+                rotation,
+                Mathf.Max(1f, _settings.FieldPadding.Value),
+                8f);
         }
 
         private void CalculateLevelBounds()
@@ -1033,7 +1292,13 @@ namespace ZeepCast.Core
             }
 
             _overviewPivot = _levelBounds.center;
-            _overviewSize = CalculateOverviewSize(_levelBounds, Quaternion.Euler(_pitch, _yaw, 0f));
+            _overviewSize = CalculateViewSize(
+                _levelBounds,
+                Quaternion.Euler(_pitch, _yaw, 0f),
+                Mathf.Max(1f, _settings.OverviewPadding.Value),
+                20f);
+            _fieldPivot = _overviewPivot;
+            _fieldSize = Mathf.Min(_overviewSize, Mathf.Max(8f, _settings.FollowSize.Value * 1.5f));
         }
 
         private void Encapsulate(Vector3 point)
@@ -1054,7 +1319,11 @@ namespace ZeepCast.Core
             }
         }
 
-        private float CalculateOverviewSize(Bounds bounds, Quaternion rotation)
+        private float CalculateViewSize(
+            Bounds bounds,
+            Quaternion rotation,
+            float padding,
+            float minimum)
         {
             var inverse = Quaternion.Inverse(rotation);
             var maxX = 0f;
@@ -1080,7 +1349,7 @@ namespace ZeepCast.Core
                 ? _camera.aspect
                 : 16f / 9f;
             var size = Mathf.Max(maxY, maxX / aspect);
-            return Mathf.Max(20f, size * Mathf.Max(1f, _settings.OverviewPadding.Value));
+            return Mathf.Max(minimum, size * padding);
         }
 
         private void ReadLevelTitle()
